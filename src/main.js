@@ -117,41 +117,52 @@ class GameScene extends Phaser.Scene {
         
         this.load.on('loaderror', (file) => {
             console.error('Failed to load asset:', file.key, file.src);
+            console.error('Full file object:', file);
         });
         
+        // Set the base URL for assets to ensure proper loading on Vercel
+        const baseURL = '';  // Vite handles this automatically
+        
         // Load all assets from the public folder - using exact names (case-sensitive for deployment)
-        this.load.image('bgFull', 'BG full.png');
-        this.load.image('blurredBG', 'Blurred BG.png');
-        this.load.image('player', 'Psyger-0.png');
-        this.load.image('sun', 'Suhn.png');
-        this.load.image('fireball', 'Fireball.png');
-        this.load.image('cloud1', 'Cloud 1.png');
-        this.load.image('cloud2', 'Cloud 2.png');
-        this.load.image('cloud3', 'Cloud 3.png');
-        this.load.image('gem', 'Gem.png');
-        this.load.image('key', 'Key.png');
-        this.load.image('gateClose', 'Gate close.png');
-        this.load.image('gateOpen', 'Gate open.png');
-        this.load.image('shield', 'Shield.png');
-        this.load.image('shieldButton', 'Shield button.png');
+        // Note: In production, Vite will handle the asset paths automatically
+        this.load.image('bgFull', `${baseURL}BG full.png`);
+        this.load.image('blurredBG', `${baseURL}Blurred BG.png`);
+        this.load.image('player', `${baseURL}Psyger-0.png`);
+        this.load.image('sun', `${baseURL}Suhn.png`);
+        this.load.image('fireball', `${baseURL}Fireball.png`);
+        this.load.image('cloud1', `${baseURL}Cloud 1.png`);
+        this.load.image('cloud2', `${baseURL}Cloud 2.png`);
+        this.load.image('cloud3', `${baseURL}Cloud 3.png`);
+        this.load.image('gem', `${baseURL}Gem.png`);
+        this.load.image('key', `${baseURL}Key.png`);
+        this.load.image('gateClose', `${baseURL}Gate close.png`);
+        this.load.image('gateOpen', `${baseURL}Gate open.png`);
+        this.load.image('shield', `${baseURL}Shield.png`);
+        this.load.image('shieldButton', `${baseURL}Shield button.png`);
         
         // UI Screen assets
-        this.load.image('gameInfo', 'Game Info.png');
-        this.load.image('gameOver', 'Game over.png');
-        this.load.image('levelCompleted', 'Level completed.png');
+        this.load.image('gameInfo', `${baseURL}Game Info.png`);
+        this.load.image('gameOver', `${baseURL}Game over.png`);
+        this.load.image('levelCompleted', `${baseURL}Level completed.png`);
         
         // Health UI assets - exact names (case-sensitive for deployment)
-        this.load.image('health1', 'Health 1.png');
-        this.load.image('health2', 'health 2.png');
-        this.load.image('health3', 'Health 3.png');
-        this.load.image('shield1', 'Shield 1.png');
-        this.load.image('shield2', 'Shield 2.png');
-        this.load.image('shield3', 'Shield 3.png');
+        this.load.image('health1', `${baseURL}Health 1.png`);
+        this.load.image('health2', `${baseURL}health 2.png`);
+        this.load.image('health3', `${baseURL}Health 3.png`);
+        this.load.image('shield1', `${baseURL}Shield 1.png`);
+        this.load.image('shield2', `${baseURL}Shield 2.png`);
+        this.load.image('shield3', `${baseURL}Shield 3.png`);
         
         // Joystick assets
-        this.load.image('joystick1', 'Joystick 1.png');
-        this.load.image('joystick2', 'Joystick 2.png');
-        this.load.image('joystick3', 'Joystick 3.png');
+        this.load.image('joystick1', `${baseURL}Joystick 1.png`);
+        this.load.image('joystick2', `${baseURL}Joystick 2.png`);
+        this.load.image('joystick3', `${baseURL}Joystick 3.png`);
+        
+        // Add a final check to see if all assets loaded
+        this.load.on('complete', () => {
+            console.log('All assets loaded successfully!');
+            console.log('Textures available:', this.textures.list);
+        });
     }
     
     create() {
