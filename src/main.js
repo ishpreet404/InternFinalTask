@@ -33,6 +33,13 @@ class GameScene extends Phaser.Scene {
         this.key = null;
         this.gate = null;
         
+        // Side-scroller specific properties
+        this.worldWidth = 3000; // Extended world width for side-scrolling
+        this.worldHeight = 1080; // Standard height
+        this.cameraFollowEnabled = false;
+        this.levelStartX = 100; // Starting X position
+        this.levelEndX = 2800; // End X position
+        
         // UI elements
         this.joystick = null;
         this.shieldButton = null;
@@ -51,7 +58,7 @@ class GameScene extends Phaser.Scene {
         this.gateOpen = false;
         this.levelComplete = false;
         this.invulnerable = false;
-        this.lastCloudPosition = { x: 200, y: 850 }; // Updated to match new start position
+        this.lastCloudPosition = { x: 100, y: 550 }; // Updated to match side-scroller start position
         
         // Timers
         this.fireballTimer = 0;
@@ -62,11 +69,11 @@ class GameScene extends Phaser.Scene {
         this.joystickInput = { x: 0, y: 0 };
         this.shieldPressed = false;
         
-        // Constants
+        // Constants for side-scroller
         this.GRAVITY = 1000;
         this.FIREBALL_GRAVITY = 500;
-        this.PLAYER_SPEED = 200;
-        this.JUMP_VELOCITY = -650; // Increased from -500 for longer jumps
+        this.PLAYER_SPEED = 250; // Increased for side-scrolling
+        this.JUMP_VELOCITY = -550; // Adjusted for horizontal platforming
         this.TERMINAL_VELOCITY = 800;
         this.FIREBALL_TERMINAL = 600;
         
@@ -280,11 +287,26 @@ class GameScene extends Phaser.Scene {
         // Update device detection now that the scene is created
         this.updateDeviceDetection();
         
+        // Set up side-scroller world bounds
+        this.physics.world.setBounds(0, 0, this.worldWidth, this.worldHeight);
+        
+        // Set up camera for side-scrolling with initial zoom
+        this.cameras.main.setBounds(0, 0, this.worldWidth, this.worldHeight);
+        
+        // Set initial zoom level based on device - increased zoom for better visibility
+        let initialZoom;
+        if (this.isMobile) {
+            initialZoom = this.isLandscape ? 1.8 : 1.6;
+        } else {
+            initialZoom = 1.6;
+        }
+        this.cameras.main.setZoom(initialZoom);
+        
         // Initialize audio system
         this.initializeAudio();
         
-        // Create background using 'BG full' - stretch to cover entire screen with mobile scaling
-        this.createResponsiveBackground();
+        // Create background using 'BG full' - stretch to cover entire world with side-scrolling
+        this.createSideScrollerBackground();
         
         // Create start screen
         this.createStartScreen();
@@ -520,8 +542,12 @@ class GameScene extends Phaser.Scene {
     }
     
     createStartScreen() {
-        // Create start screen with Game Info asset
-        this.startScreen = this.add.container(960, 540);
+        // Create start screen with Game Info asset - fixed to camera
+        const screenCenterX = this.cameras.main.width / 2;
+        const screenCenterY = this.cameras.main.height / 2;
+        
+        this.startScreen = this.add.container(screenCenterX, screenCenterY);
+        this.startScreen.setScrollFactor(0); // Fixed to camera
         
         // Add blurred background for start screen with mobile scaling
         const startBG = this.add.image(0, 0, 'blurredBG');
@@ -569,8 +595,9 @@ class GameScene extends Phaser.Scene {
     }
     
     createGameOverScreen() {
-        // Create game over screen with Game Over asset
+        // Create game over screen with Game Over asset - fixed to camera
         this.gameOverScreen = this.add.container(960, 540);
+        this.gameOverScreen.setScrollFactor(0); // Fixed to camera
         
         // Add blurred background with mobile scaling
         const gameOverBG = this.add.image(0, 0, 'blurredBG');
@@ -619,8 +646,9 @@ class GameScene extends Phaser.Scene {
     }
     
     createLevelCompleteScreen() {
-        // Create level complete screen with Level Completed asset
+        // Create level complete screen with Level Completed asset - fixed to camera
         this.levelCompleteScreen = this.add.container(960, 540);
+        this.levelCompleteScreen.setScrollFactor(0); // Fixed to camera
         
         // Add blurred background with mobile scaling
         const completeBG = this.add.image(0, 0, 'blurredBG');
@@ -670,59 +698,58 @@ class GameScene extends Phaser.Scene {
     
     initializeGameObjects() {
         
-        // Create sun enemy at top-right corner
-        this.sun = this.add.image(1700, 100, 'sun');
-        this.sun.setScale(0.8 * this.scaleFactor);
+        // Create sun enemy repositioned for side-scrolling - follows player horizontally
+        this.sun = this.add.image(500, 100, 'sun');
+        this.sun.setScale(1.2 * this.scaleFactor); // Increased from 0.8 for full visibility
         this.sun.setVisible(false); // Hidden initially
         
-        // Create player at bottom-left cloud start position
-        // Position player above the first cloud so they can land on it properly
-        this.player = this.physics.add.sprite(200, 790, 'player'); // Positioned to land on first cloud
+        // Create player at starting position for side-scroller
+        this.player = this.physics.add.sprite(150, 480, 'player'); // Positioned to land on first platform at Y=550
         
-        // Apply mobile scaling to player
-        const playerDisplayWidth = 48 * this.scaleFactor;
-        const playerDisplayHeight = 72 * this.scaleFactor;
-        const playerBodyWidth = 36 * this.scaleFactor;
-        const playerBodyHeight = 66 * this.scaleFactor;
+        // Apply mobile scaling to player - INCREASED SIZE FOR BETTER VISIBILITY
+        const playerDisplayWidth = 80 * this.scaleFactor; // Increased from 64
+        const playerDisplayHeight = 120 * this.scaleFactor; // Increased from 96
+        const playerBodyWidth = 60 * this.scaleFactor; // Increased from 48
+        const playerBodyHeight = 110 * this.scaleFactor; // Increased from 88
         
         this.player.setDisplaySize(playerDisplayWidth, playerDisplayHeight);
         this.player.body.setSize(playerBodyWidth, playerBodyHeight);
-        this.player.setCollideWorldBounds(false);
+        this.player.setCollideWorldBounds(true); // Keep player within world bounds
         this.player.body.setGravityY(this.GRAVITY);
         this.player.body.setMaxVelocityY(this.TERMINAL_VELOCITY);
-        this.player.isGrounded = false; // Start falling to land on cloud
+        this.player.isGrounded = false; // Start falling to land on platform
         this.player.setVisible(false); // Hidden initially
         
-        // Create clouds with physics using exact positions and cloud types
+        // Create side-scroller platforms
         this.createClouds();
         
-        // Create gems on specific clouds
-        this.createGems();
+        // Create gems on specific platforms
+        this.createSideScrollerGems();
         
-        // Create key on third-to-last cloud - positioned above the sixth cloud
-        this.key = this.physics.add.sprite(1200, 320, 'key');
+        // Create key on one of the later platforms
+        this.key = this.physics.add.sprite(1750, 230, 'key'); // Above sixth platform (Y=300, key at Y=230)
         
-        // Apply mobile scaling to key
-        const keySize = 30 * this.scaleFactor;
+        // Apply mobile scaling to key - INCREASED SIZE FOR BETTER VISIBILITY
+        const keySize = 50 * this.scaleFactor; // Increased from 40
         this.key.setDisplaySize(keySize, keySize);
         this.key.body.setImmovable(true);
         this.key.body.setGravityY(0);
         this.key.floatDirection = 1;
-        this.key.originalY = 320;
+        this.key.originalY = 230;
         this.key.setVisible(false); // Hidden initially
         
-        // Create gate on final platform - positioned independently
-        this.gate = this.physics.add.sprite(1500, 220, 'gateClose'); // Gate positioned at (1500, 220)
+        // Create gate at the end of the level
+        this.gate = this.physics.add.sprite(2700, 300, 'gateClose'); // End of level
         this.gate.body.setImmovable(true);
         this.gate.body.setGravityY(0);
         
         // Apply mobile scaling to gate
         this.gate.setScale(this.scaleFactor);
         
-        // Set collision box using optimized values with mobile scaling - increased width for better landing
-        const gateCollisionWidth = 300 * this.scaleFactor;
-        const gateCollisionHeight = 14.29 * this.scaleFactor;
-        const gateOffsetX = -5.52 * this.scaleFactor;
+        // Set collision box for gate platform
+        const gateCollisionWidth = 200 * this.scaleFactor;
+        const gateCollisionHeight = 20 * this.scaleFactor;
+        const gateOffsetX = 0;
         const gateOffsetY = 315.71 * this.scaleFactor;
         
         this.gate.body.setSize(gateCollisionWidth, gateCollisionHeight);
@@ -807,6 +834,37 @@ class GameScene extends Phaser.Scene {
         
         // Reset game state
         this.resetGameState();
+        
+        // Enable camera following for side-scrolling
+        this.setupCameraFollow();
+    }
+    
+    setupCameraFollow() {
+        if (this.player) {
+            // Set up camera to follow player with zoom for better visibility
+            this.cameras.main.startFollow(this.player, true, 0.08, 0.04);
+            
+            // Apply zoom based on device type for better element visibility
+            let zoomLevel;
+            if (this.isMobile) {
+                zoomLevel = this.isLandscape ? 1.8 : 1.6; // Increased zoom for mobile
+            } else {
+                zoomLevel = 1.6; // Increased zoom for desktop
+            }
+            this.cameras.main.setZoom(zoomLevel);
+            
+            // Adjust world bounds for the zoomed camera
+            this.cameras.main.setBounds(0, 0, this.worldWidth, this.worldHeight);
+            
+            // Set smaller dead zone for tighter following with zoom
+            this.cameras.main.setDeadzone(150, 80);
+            
+            // Center player better in the zoomed view and move camera higher above player
+            this.cameras.main.setFollowOffset(-10, 50);
+            
+            this.cameraFollowEnabled = true;
+            console.log('Camera following enabled with zoom:', zoomLevel);
+        }
     }
     
     hideGameElements() {
@@ -819,7 +877,9 @@ class GameScene extends Phaser.Scene {
         this.clouds.forEach(cloud => cloud.setVisible(false));
         
         // Hide gems
-        this.gems.forEach(gem => gem.setVisible(false));
+        this.gems.forEach(gem => {
+            gem.setVisible(false);
+        });
         
         // Hide UI
         if (this.shieldDisplays) this.shieldDisplays.forEach(shield => shield.setVisible(false));
@@ -839,7 +899,9 @@ class GameScene extends Phaser.Scene {
         this.clouds.forEach(cloud => cloud.setVisible(true));
         
         // Show gems
-        this.gems.forEach(gem => gem.setVisible(true));
+        this.gems.forEach(gem => {
+            gem.setVisible(true);
+        });
         
         // Show UI
         if (this.joystickBase) this.joystickBase.setVisible(true);
@@ -851,10 +913,10 @@ class GameScene extends Phaser.Scene {
     }
     
     resetGameState() {
-        // Reset player position and stats - position player above first cloud to land properly
-        this.player.setPosition(200, 790); // Positioned to land on first cloud
+        // Reset player position for side-scroller - start at beginning
+        this.player.setPosition(150, 480); // Start above first platform at Y=550
         this.player.body.setVelocity(0, 0);
-        this.player.isGrounded = false; // Start falling to land on cloud
+        this.player.isGrounded = false;
         this.playerHealth = 3;
         this.shieldHealth = this.maxShieldHealth;
         this.hasKey = false;
@@ -863,10 +925,16 @@ class GameScene extends Phaser.Scene {
         this.invulnerable = false;
         this.isShielding = false;
         
+        // Reset camera to follow player from start
+        if (this.cameraFollowEnabled) {
+            this.cameras.main.stopFollow();
+            this.setupCameraFollow();
+        }
+        
         // Reset gate
         this.gate.setTexture('gateClose');
         
-        // Reset clouds
+        // Reset clouds/platforms
         this.clouds.forEach(cloud => {
             cloud.disappearTimer = -1;
             cloud.setAlpha(1);
@@ -882,19 +950,19 @@ class GameScene extends Phaser.Scene {
         
         // Recreate key if it was destroyed
         if (!this.key || !this.key.active) {
-            this.key = this.physics.add.sprite(1200, 320, 'key');
-            const keySize = 30 * this.scaleFactor;
+            this.key = this.physics.add.sprite(1750, 230, 'key');
+            const keySize = 50 * this.scaleFactor; // Updated to match increased size
             this.key.setDisplaySize(keySize, keySize);
             this.key.body.setImmovable(true);
             this.key.body.setGravityY(0);
             this.key.floatDirection = 1;
-            this.key.originalY = 320;
+            this.key.originalY = 230;
         } else {
             // Reset key properties if it already exists
-            this.key.setPosition(1200, 320);
+            this.key.setPosition(1750, 230);
             this.key.setVisible(true);
             this.key.setAlpha(1);
-            const keySize = 30 * this.scaleFactor;
+            const keySize = 50 * this.scaleFactor; // Updated to match increased size
             this.key.setDisplaySize(keySize, keySize);
         }
         
@@ -902,46 +970,51 @@ class GameScene extends Phaser.Scene {
         if (this.sun) {
             this.sun.setVisible(true);
             this.sun.setAlpha(1);
-            this.sun.setScale(0.8);
+            this.sun.setScale(1.2 * this.scaleFactor); // Updated to match increased size
         }
         
         // Recreate gems if they were collected
-        this.createGems();
+        this.createSideScrollerGems();
         
         // Update UI
         this.updateHealthUI();
     }
     
     createClouds() {
-        // Simplified cloud layout - 7 large clouds forming clear upward path from bottom-left to top-right
+        // Side-scroller cloud layout - platforms arranged horizontally with gaps for jumping
+        // Moved all platforms higher (reduced Y values by 150-200) to ensure sun visibility when zoomed
         const cloudData = [
-            // Starting cloud - bottom left
-            { x: 200, y: 850, type: 'cloud1', size: { w: 180, h: 60 }, 
-              collision: { width: 400, height: 0.39, offsetX: 105, offsetY: 277.5 } },
+            // Starting platform - left side
+            { x: 200, y: 550, type: 'cloud1', size: { w: 200, h: 70 }, 
+              collision: { width: 400, height: 15, offsetX: 105, offsetY: 277.5 } },
             
-            // Second cloud - step up and right
-            { x: 450, y: 750, type: 'cloud2', size: { w: 170, h: 55 },
-              collision: { width: 400, height: 0.37, offsetX: 20, offsetY: 285 } },
+            // Second platform - small gap
+            { x: 550, y: 500, type: 'cloud2', size: { w: 180, h: 65 },
+              collision: { width: 350, height: 15, offsetX: 20, offsetY: 285 } },
             
-            // Third cloud - continue upward path
-            { x: 700, y: 650, type: 'cloud3', size: { w: 175, h: 60 },
-              collision: { width: 400, height: 0.33, offsetX: 55, offsetY: 282.5 } },
+            // Third platform - slightly elevated
+            { x: 850, y: 450, type: 'cloud3', size: { w: 175, h: 60 },
+              collision: { width: 350, height: 15, offsetX: 55, offsetY: 282.5 } },
             
-            // Fourth cloud - center area with key
-            { x: 800, y: 550, type: 'cloud1', size: { w: 180, h: 65 },
-              collision: { width: 400, height: 0.46, offsetX: 105, offsetY: 285 } },
+            // Fourth platform - mid-level with gem
+            { x: 1150, y: 400, type: 'cloud1', size: { w: 190, h: 70 },
+              collision: { width: 380, height: 15, offsetX: 105, offsetY: 285 } },
             
-            // Fifth cloud - continue climbing
-            { x: 1000, y: 450, type: 'cloud2', size: { w: 170, h: 55 },
-              collision: { width: 400, height: 0.37, offsetX: 30, offsetY: 275 } },
+            // Fifth platform - higher jump required
+            { x: 1450, y: 350, type: 'cloud2', size: { w: 170, h: 60 },
+              collision: { width: 340, height: 15, offsetX: 30, offsetY: 275 } },
             
-            // Sixth cloud - approach final area
-            { x: 1200, y: 350, type: 'cloud3', size: { w: 175, h: 60 },
-              collision: { width: 400, height: 0.33, offsetX: 55, offsetY: 327.5 } },
+            // Sixth platform - key location
+            { x: 1750, y: 300, type: 'cloud3', size: { w: 175, h: 65 },
+              collision: { width: 350, height: 15, offsetX: 55, offsetY: 327.5 } },
             
-            // Seventh cloud - pre-final platform
-            { x: 1350, y: 280, type: 'cloud1', size: { w: 160, h: 55 },
-              collision: { width: 400, height: 0.33, offsetX: 130, offsetY: 315 } }
+            // Seventh platform - approach to gate
+            { x: 2050, y: 250, type: 'cloud1', size: { w: 180, h: 60 },
+              collision: { width: 360, height: 15, offsetX: 130, offsetY: 315 } },
+            
+            // Final platform before gate
+            { x: 2350, y: 200, type: 'cloud2', size: { w: 200, h: 70 },
+              collision: { width: 400, height: 15, offsetX: 30, offsetY: 285 } }
         ];
         
         cloudData.forEach((data, index) => {
@@ -962,12 +1035,12 @@ class GameScene extends Phaser.Scene {
                 cloud.setImmovable(true);
                 cloud.body.setGravityY(0);
                 
-                // Set visual size with mobile scaling
-                const scaledWidth = data.size.w * this.scaleFactor;
-                const scaledHeight = data.size.h * this.scaleFactor;
+                // Set visual size with mobile scaling - INCREASED SIZE FOR BETTER VISIBILITY
+                const scaledWidth = data.size.w * this.scaleFactor * 1.5; // Increased to 50%
+                const scaledHeight = data.size.h * this.scaleFactor * 1.5; // Increased to 50%
                 cloud.setDisplaySize(scaledWidth, scaledHeight);
                 
-                // Use optimized collision box settings from debug session with mobile scaling
+                // Use flatter collision boxes for side-scrolling platforms
                 const scaledCollisionWidth = data.collision.width * this.scaleFactor;
                 const scaledCollisionHeight = data.collision.height * this.scaleFactor;
                 const scaledOffsetX = data.collision.offsetX * this.scaleFactor;
@@ -979,134 +1052,184 @@ class GameScene extends Phaser.Scene {
                 cloud.disappearTimer = -1; // -1 means not activated
                 cloud.originalAlpha = 1;
                 cloud.isSolid = true;
-                
-                // Store platform dimensions for collision detection
-                cloud.platformTop = data.y - data.size.h / 2;
-                cloud.platformWidth = data.collision.width;
-                
-                // Add debug info for mobile deployment
-                console.log(`Cloud ${index} created:`, {
-                    type: data.type,
-                    position: { x: data.x, y: data.y },
-                    scaleFactor: this.scaleFactor,
-                    collisionBox: {
-                        width: scaledCollisionWidth,
-                        height: scaledCollisionHeight,
-                        offsetX: scaledOffsetX,
-                        offsetY: scaledOffsetY
-                    }
-                });
+                cloud.setVisible(false); // Hidden initially
                 
                 this.clouds.push(cloud);
+                
+                console.log(`Created side-scroller cloud ${index} at (${data.x}, ${data.y}) with type ${data.type}`);
             } catch (error) {
                 console.error(`Error creating cloud ${index}:`, error);
             }
         });
+        
+        console.log(`Total clouds created: ${this.clouds.length}`);
     }
     
-    createGems() {
+    createSideScrollerGems() {
         // Clear any existing gems first
         this.gems.forEach(gem => {
-            if (gem && gem.active) {
-                gem.destroy();
-            }
+            if (gem) gem.destroy();
         });
         this.gems = [];
         
-        // Place gems on top of clouds - clean positioning
+        // Side-scroller gem positions - placed prominently above platforms for maximum visibility
         const gemPositions = [
-            { x: 450, y: 720 },  // On second cloud (450, 750)
-            { x: 700, y: 620 },  // On third cloud (700, 650) 
-            { x: 1000, y: 420 }, // On fifth cloud (1000, 450)
+            { x: 550, y: 350 },  // On second platform (Y=500, gem much higher at Y=350)
+            { x: 1150, y: 250 }, // On fourth platform (Y=400, gem much higher at Y=250)
+            { x: 2050, y: 100 }, // On seventh platform (Y=250, gem much higher at Y=100)
         ];
         
-        gemPositions.forEach(pos => {
-            const gem = this.physics.add.sprite(pos.x, pos.y, 'gem');
-            
-            // Apply mobile scaling to gems
-            const gemSize = 24 * this.scaleFactor;
-            gem.setDisplaySize(gemSize, gemSize);
-            gem.body.setImmovable(true);
-            gem.body.setGravityY(0);
-            gem.floatDirection = 1;
-            gem.originalY = pos.y;
-            this.gems.push(gem);
+        gemPositions.forEach((pos, index) => {
+            try {
+                const gem = this.physics.add.sprite(pos.x, pos.y, 'gem');
+                
+                if (!gem || !gem.texture || gem.texture.key === '__MISSING') {
+                    console.error(`Gem ${index} asset failed to load, creating fallback`);
+                    // Create a visible fallback gem if texture fails
+                    gem.destroy();
+                    const fallbackGem = this.add.circle(pos.x, pos.y, 40 * this.scaleFactor, 0x00FF00); // Bright green circle
+                    fallbackGem.setStrokeStyle(4, 0xFFFFFF);
+                    fallbackGem.setDepth(100);
+                    this.gems.push(fallbackGem);
+                    return;
+                }
+                
+                console.log(`Gem ${index} texture loaded successfully:`, gem.texture.key);
+                
+                // Apply mobile scaling - MODERATE SIZE FOR VISIBILITY
+                const gemSize = 50 * this.scaleFactor; // Reduced from 80 for better balance
+                gem.setDisplaySize(gemSize, gemSize);
+                gem.body.setImmovable(true);
+                gem.body.setGravityY(0);
+                
+                // Add bright tint for better visibility
+                gem.setTint(0xFFFFFF); // Pure white tint to make it brighter
+                
+                // Add floating animation with simple effects
+                gem.floatDirection = 1;
+                gem.originalY = pos.y;
+                // Gems are immediately visible for testing
+                
+                // Set depth to ensure it's always on top
+                gem.setDepth(100);
+                
+                this.gems.push(gem);
+                console.log(`Created side-scroller gem ${index} at (${pos.x}, ${pos.y})`);
+                console.log(`Gem ${index} properties:`, {
+                    visible: gem.visible,
+                    alpha: gem.alpha,
+                    scale: gem.scale,
+                    depth: gem.depth,
+                    tint: gem.tint.toString(16),
+                    x: gem.x,
+                    y: gem.y,
+                    displayWidth: gem.displayWidth,
+                    displayHeight: gem.displayHeight
+                });
+            } catch (error) {
+                console.error(`Error creating gem ${index}:`, error);
+            }
+        });
+        
+        console.log(`Total gems created: ${this.gems.length}`);
+        
+        // Debug: Log gem status after a short delay
+        this.time.delayedCall(1000, () => {
+            console.log('=== GEM STATUS AFTER 1 SECOND ===');
+            this.gems.forEach((gem, index) => {
+                console.log(`Gem ${index}:`, {
+                    visible: gem.visible,
+                    x: gem.x,
+                    y: gem.y,
+                    alpha: gem.alpha,
+                    scale: gem.scale,
+                    depth: gem.depth,
+                    active: gem.active,
+                    texture: gem.texture ? gem.texture.key : 'NO TEXTURE'
+                });
+            });
         });
     }
     
     createUI() {
-        // Create individual shield displays (3 shields in a row) with mobile positioning
+        // Create individual shield displays (3 shields in a row) with camera-fixed positioning
         this.shieldDisplays = [];
-        const shieldSpacing = this.isMobile ? 30 : 35;
-        const shieldStartX = this.isMobile && this.isLandscape ? 15 : 20;
-        const shieldY = this.isMobile && this.isLandscape ? 15 : 20;
+        const shieldSpacing = this.isMobile ? 50 : 60; // Increased spacing for better visibility
+        const shieldStartX = this.isMobile && this.isLandscape ? 30 : 40; // Increased margin for zoom
+        const shieldY = this.isMobile && this.isLandscape ? 30 : 40; // Increased margin for zoom
         
         for (let i = 0; i < 3; i++) {
             const shield = this.add.image(shieldStartX + (i * shieldSpacing), shieldY, 'shield1');
             shield.setOrigin(0, 0);
-            shield.setScale(0.6 * this.uiScaleFactor);
+            shield.setScale(1.2 * this.uiScaleFactor); // Increased from 0.8 for better visibility at zoom
+            shield.setScrollFactor(0); // Fixed to camera
             this.shieldDisplays.push(shield);
         }
         
-        // Create individual health displays (3 hearts in a row below shields) with mobile positioning
+        // Create individual health displays (3 hearts in a row below shields) with camera-fixed positioning
         this.healthDisplays = [];
-        const healthStartX = this.isMobile && this.isLandscape ? 15 : 20;
-        const healthY = this.isMobile && this.isLandscape ? 55 : 70;
+        const healthStartX = this.isMobile && this.isLandscape ? 30 : 40; // Increased margin for zoom
+        const healthY = this.isMobile && this.isLandscape ? 85 : 110; // Increased spacing for zoom
         
         for (let i = 0; i < 3; i++) {
             const heart = this.add.image(healthStartX + (i * shieldSpacing), healthY, 'health1');
             heart.setOrigin(0, 0);
-            heart.setScale(0.6 * this.uiScaleFactor);
+            heart.setScale(1.2 * this.uiScaleFactor); // Increased from 0.8 for better visibility at zoom
+            heart.setScrollFactor(0); // Fixed to camera
             this.healthDisplays.push(heart);
         }
         
-        // Create joystick using joystick assets with mobile-responsive positioning
+        // Create joystick using joystick assets with camera-fixed positioning
         let joystickX, joystickY;
         if (this.isMobile && this.isLandscape) {
             // Landscape mobile: position closer to bottom-left corner
-            joystickX = 80;
-            joystickY = this.cameras.main.height - 80;
+            joystickX = 100; // Increased from 80
+            joystickY = this.cameras.main.height - 100; // Increased from 80
         } else if (this.isMobile) {
             // Portrait mobile: standard mobile positioning
-            joystickX = 100;
-            joystickY = this.cameras.main.height - 120;
+            joystickX = 120; // Increased from 100
+            joystickY = this.cameras.main.height - 140; // Increased from 120
         } else {
             // Desktop: fixed position
-            joystickX = 100;
+            joystickX = 120; // Increased from 100
             joystickY = 980;
         }
         
         this.joystickBase = this.add.image(joystickX, joystickY, 'joystick1');
-        this.joystickBase.setScale(0.8 * this.uiScaleFactor);
+        this.joystickBase.setScale(1.0 * this.uiScaleFactor); // Increased from 0.8
         this.joystickBase.setAlpha(0.7);
+        this.joystickBase.setScrollFactor(0); // Fixed to camera
         this.joystickBase.setVisible(false); // Hidden initially
         
-        this.joystickKnob = this.add.circle(joystickX, joystickY, 20 * this.uiScaleFactor, 0xffffff, 0.8);
+        this.joystickKnob = this.add.circle(joystickX, joystickY, 25 * this.uiScaleFactor, 0xffffff, 0.8); // Increased from 20
+        this.joystickKnob.setScrollFactor(0); // Fixed to camera
         this.joystickKnob.setVisible(false); // Hidden initially
         this.joystickCenter = { x: joystickX, y: joystickY };
         
-        // Create shield button with mobile-responsive positioning
+        // Create shield button with camera-fixed positioning
         let shieldButtonX, shieldButtonY;
         if (this.isMobile && this.isLandscape) {
             // Landscape mobile: position closer to bottom-right corner
-            shieldButtonX = this.cameras.main.width - 80;
-            shieldButtonY = this.cameras.main.height - 80;
+            shieldButtonX = this.cameras.main.width - 100; // Increased from 80
+            shieldButtonY = this.cameras.main.height - 100; // Increased from 80
         } else if (this.isMobile) {
             // Portrait mobile: standard mobile positioning
-            shieldButtonX = this.cameras.main.width - 120;
-            shieldButtonY = this.cameras.main.height - 120;
+            shieldButtonX = this.cameras.main.width - 140; // Increased from 120
+            shieldButtonY = this.cameras.main.height - 140; // Increased from 120
         } else {
             // Desktop: fixed position
-            shieldButtonX = 1820;
+            shieldButtonX = 1800; // Adjusted from 1820
             shieldButtonY = 980;
         }
         
         this.shieldButton = this.add.image(shieldButtonX, shieldButtonY, 'shieldButton');
-        this.shieldButton.setScale(0.8 * this.uiScaleFactor);
+        this.shieldButton.setScale(1.0 * this.uiScaleFactor); // Increased from 0.8
         this.shieldButton.setInteractive();
         this.shieldButton.setAlpha(0.8);
+        this.shieldButton.setScrollFactor(0); // Fixed to camera
         this.shieldButton.setVisible(false); // Hidden initially
-         this.updateHealthUI();
+        
+        this.updateHealthUI();
     }
 
     updateUIPositions() {
@@ -1126,8 +1249,8 @@ class GameScene extends Phaser.Scene {
         
         if (this.isMobile) {
             // Mobile device positioning - responsive to screen size
-            const margin = Math.max(50, Math.min(100, screenWidth * 0.05)); // 5% of screen width, min 50px, max 100px
-            const bottomMargin = Math.max(60, Math.min(120, screenHeight * 0.08)); // 8% of screen height
+            const margin = Math.max(60, Math.min(120, screenWidth * 0.06));
+            const bottomMargin = Math.max(80, Math.min(140, screenHeight * 0.1));
             
             if (this.isLandscape) {
                 // Landscape mobile: position closer to edges
@@ -1145,10 +1268,10 @@ class GameScene extends Phaser.Scene {
         } else {
             // Desktop: use fixed positions but scale appropriately
             const scale = Math.min(screenWidth / 1920, screenHeight / 1080);
-            joystickX = 100 * scale;
-            joystickY = screenHeight - (100 * scale);
-            shieldButtonX = screenWidth - (100 * scale);
-            shieldButtonY = screenHeight - (100 * scale);
+            joystickX = 120 * scale;
+            joystickY = screenHeight - (120 * scale);
+            shieldButtonX = screenWidth - (120 * scale);
+            shieldButtonY = screenHeight - (120 * scale);
         }
         
         this.joystickBase.setPosition(joystickX, joystickY);
@@ -1158,27 +1281,27 @@ class GameScene extends Phaser.Scene {
         this.shieldButton.setPosition(shieldButtonX, shieldButtonY);
         
         // Update health and shield display positioning with responsive spacing
-        const uiMargin = this.isMobile ? Math.max(15, screenWidth * 0.02) : 20;
-        const shieldSpacing = this.isMobile ? Math.max(25, screenWidth * 0.025) : 35;
-        const topMargin = this.isMobile ? Math.max(15, screenHeight * 0.02) : 20;
+        const uiMargin = this.isMobile ? Math.max(30, screenWidth * 0.03) : 40; // Increased margins
+        const shieldSpacing = this.isMobile ? Math.max(45, screenWidth * 0.035) : 60; // Increased spacing
+        const topMargin = this.isMobile ? Math.max(30, screenHeight * 0.03) : 40; // Increased top margin
         
         // Update shield displays
         for (let i = 0; i < this.shieldDisplays.length; i++) {
             this.shieldDisplays[i].setPosition(uiMargin + (i * shieldSpacing), topMargin);
-            this.shieldDisplays[i].setScale(0.6 * this.uiScaleFactor);
+            this.shieldDisplays[i].setScale(1.2 * this.uiScaleFactor); // Increased scale for zoom visibility
         }
         
         // Update health displays (below shields)
-        const healthY = topMargin + (this.isMobile ? 35 : 50);
+        const healthY = topMargin + (this.isMobile ? 55 : 70); // Increased spacing
         for (let i = 0; i < this.healthDisplays.length; i++) {
             this.healthDisplays[i].setPosition(uiMargin + (i * shieldSpacing), healthY);
-            this.healthDisplays[i].setScale(0.6 * this.uiScaleFactor);
+            this.healthDisplays[i].setScale(1.2 * this.uiScaleFactor); // Increased scale for zoom visibility
         }
         
         // Update joystick and button scales
-        this.joystickBase.setScale(0.8 * this.uiScaleFactor);
-        this.joystickKnob.setRadius(20 * this.uiScaleFactor);
-        this.shieldButton.setScale(0.8 * this.uiScaleFactor);
+        this.joystickBase.setScale(1.0 * this.uiScaleFactor);
+        this.joystickKnob.setRadius(25 * this.uiScaleFactor);
+        this.shieldButton.setScale(1.0 * this.uiScaleFactor);
         
         console.log('UI positions updated:', {
             joystick: { x: joystickX, y: joystickY },
@@ -1206,7 +1329,7 @@ class GameScene extends Phaser.Scene {
             if (this.gameState !== 'PLAYING') return;
             
             const distance = Phaser.Math.Distance.Between(pointer.x, pointer.y, this.joystickCenter.x, this.joystickCenter.y);
-            const joystickRange = 60 * this.uiScaleFactor;
+            const joystickRange = 75 * this.uiScaleFactor; // Increased from 60
             if (distance <= joystickRange) {
                 this.joystickActive = true;
                 this.updateJoystick(pointer);
@@ -1229,7 +1352,7 @@ class GameScene extends Phaser.Scene {
             }
             
             const shieldDistance = Phaser.Math.Distance.Between(pointer.x, pointer.y, shieldButtonX, shieldButtonY);
-            if (shieldDistance <= 60) {
+            if (shieldDistance <= 75) { // Increased from 60
                 this.shieldPressed = true;
                 this.shieldButton.setTint(0x888888);
             }
@@ -1263,7 +1386,7 @@ class GameScene extends Phaser.Scene {
         const angle = Phaser.Math.Angle.Between(this.joystickCenter.x, this.joystickCenter.y, pointer.x, pointer.y);
         
         // Scale joystick range for mobile
-        const joystickRange = 60 * this.uiScaleFactor;
+        const joystickRange = 75 * this.uiScaleFactor; // Increased from 60
         
         if (distance <= joystickRange) {
             this.joystickKnob.setPosition(pointer.x, pointer.y);
@@ -1516,11 +1639,39 @@ class GameScene extends Phaser.Scene {
         if (this.player.y > 1000 && !this.player.isGrounded) {
             console.log('Player falling, position:', this.player.y, 'velocity:', this.player.body.velocity.y);
         }
+        
+        // Additional fall detection: if player is falling fast and far from any platform
+        if (!this.player.isGrounded && this.player.body.velocity.y > 200) {
+            let nearPlatform = false;
+            const playerX = this.player.x;
+            const platformCheckDistance = 150; // Check if player is within this distance of any platform
+            
+            this.clouds.forEach(cloud => {
+                const distance = Math.abs(cloud.x - playerX);
+                if (distance < platformCheckDistance) {
+                    nearPlatform = true;
+                }
+            });
+            
+            // Also check gate platform
+            if (this.gate && Math.abs(this.gate.x - playerX) < platformCheckDistance) {
+                nearPlatform = true;
+            }
+            
+            // If player is falling and not near any platform and below a certain Y threshold
+            if (!nearPlatform && this.player.y > 900) {
+                console.log('Player falling away from platforms - triggering death');
+                this.checkDeath(); // This will handle the actual death logic
+            }
+        }
     }
     
     updateGems(deltaSeconds) {
         this.gems.forEach(gem => {
-            // Floating animation
+            // Skip if this is a fallback gem (circle)
+            if (!gem.originalY) return;
+            
+            // Simple floating animation
             gem.floatDirection = gem.y <= gem.originalY - 10 ? 1 : gem.y >= gem.originalY + 10 ? -1 : gem.floatDirection;
             gem.y += gem.floatDirection * 20 * deltaSeconds;
         });
@@ -1557,18 +1708,19 @@ class GameScene extends Phaser.Scene {
     
     updateFireballs(deltaSeconds) {
         this.fireballs.children.entries.forEach(fireball => {
-            // Apply gravity
-            fireball.body.setAccelerationY(this.FIREBALL_GRAVITY);
-            
+            // Fireballs now use automatic gravity from the body
             // Limit terminal velocity
             if (fireball.body.velocity.y > this.FIREBALL_TERMINAL) {
                 fireball.body.setVelocityY(this.FIREBALL_TERMINAL);
             }
             
-            // Fireballs now pass through clouds - no collision with clouds
+            // Remove fireballs that fall off screen or go too far off camera
+            const cameraX = this.cameras.main.scrollX;
+            const cameraWidth = this.cameras.main.width;
             
-            // Remove fireballs that fall off screen
-            if (fireball.y > 1100) {
+            if (fireball.y > 1100 || 
+                fireball.x < cameraX - 200 || 
+                fireball.x > cameraX + cameraWidth + 200) {
                 fireball.destroy();
             }
         });
@@ -1586,63 +1738,67 @@ class GameScene extends Phaser.Scene {
     }
     
     spawnFireball() {
-        // Spawn fireballs at sun position, aimed directly at cloud positions with physics prediction
-        const sunX = 1700;
-        const sunY = 100;
-        
-        // Target random cloud positions to threaten the climbing path
-        const cloudTargets = [
-            { x: 200, y: 850 },   // Starting cloud
-            { x: 450, y: 750 },   // Second cloud
-            { x: 700, y: 650 },   // Third cloud
-            { x: 800, y: 550 },   // Fourth cloud (key)
-            { x: 1000, y: 450 },  // Fifth cloud
-            { x: 1200, y: 350 },  // Sixth cloud
-            { x: 1350, y: 280 }   // Seventh cloud
-        ];
-        
-        // Randomly select a cloud to target
-        const target = cloudTargets[Math.floor(Math.random() * cloudTargets.length)];
-        
-        // Calculate distance to target
-        const deltaX = target.x - sunX;
-        const deltaY = target.y - sunY;
-        const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-        
-        // Calculate time to reach target (accounting for gravity)
-        const initialSpeed = 400;
-        const timeToTarget = distance / initialSpeed;
-        
-        // Calculate initial velocity components to hit the target
-        // Account for gravity affecting Y trajectory
-        const velocityX = deltaX / timeToTarget;
-        const velocityY = (deltaY - 0.5 * this.FIREBALL_GRAVITY * timeToTarget * timeToTarget) / timeToTarget;
-        
-        // Add small random spread (±10% of velocity for slight inaccuracy)
-        const spreadFactor = 0.1;
-        const finalVelocityX = velocityX + (Math.random() - 0.5) * Math.abs(velocityX) * spreadFactor;
-        const finalVelocityY = velocityY + (Math.random() - 0.5) * Math.abs(velocityY) * spreadFactor;
-        
-        // Spawn at sun position with small offset
-        const offsetX = Phaser.Math.Between(-20, 20);
-        const offsetY = Phaser.Math.Between(-10, 10);
-        const fireball = this.fireballs.create(sunX + offsetX, sunY + offsetY, 'fireball');
-        
-        // Play fireball spawn sound
-        this.playSound('fireballSpawn', { volume: 0.3 });
-        
-        // Set calculated velocity
-        fireball.body.setVelocity(finalVelocityX, finalVelocityY);
-        fireball.body.setGravityY(0); // We'll handle gravity manually
-        fireball.setScale(0.8 * this.scaleFactor);
-        
-        // Apply mobile scaling to fireball size
-        const fireballSize = 32 * this.scaleFactor;
-        fireball.setDisplaySize(fireballSize, fireballSize);
-        
-        // Rotate fireball to match trajectory
-        const angle = Math.atan2(finalVelocityY, finalVelocityX);
-        fireball.setRotation(angle);
+        // Update sun position to follow player for side-scrolling
+        if (this.player && this.cameraFollowEnabled) {
+            // Position sun relative to camera/player position but offset
+            const cameraX = this.cameras.main.scrollX;
+            const sunX = cameraX + 600; // Keep sun ahead of player
+            const sunY = 100;
+            
+            // Update sun position
+            this.sun.setPosition(sunX, sunY);
+            
+            // Target player's current position plus some prediction
+            const playerX = this.player.x;
+            const playerY = this.player.y;
+            
+            // Add some prediction based on player velocity
+            const playerVelX = this.player.body.velocity.x;
+            const playerVelY = this.player.body.velocity.y;
+            const predictionTime = 1.0; // 1 second prediction
+            
+            const targetX = playerX + playerVelX * predictionTime;
+            const targetY = playerY + playerVelY * predictionTime * 0.5; // Less Y prediction
+            
+            // Calculate distance to target
+            const deltaX = targetX - sunX;
+            const deltaY = targetY - sunY;
+            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+            
+            // Calculate time to reach target
+            const initialSpeed = 350; // Slightly slower for side-scrolling
+            const timeToTarget = distance / initialSpeed;
+            
+            // Calculate initial velocity components
+            const velocityX = deltaX / timeToTarget;
+            const velocityY = (deltaY - 0.5 * this.FIREBALL_GRAVITY * timeToTarget * timeToTarget) / timeToTarget;
+            
+            // Add some randomness for variety
+            const spreadFactor = 0.15;
+            const finalVelocityX = velocityX + (Math.random() - 0.5) * Math.abs(velocityX) * spreadFactor;
+            const finalVelocityY = velocityY + (Math.random() - 0.5) * Math.abs(velocityY) * spreadFactor;
+            
+            // Spawn at sun position
+            const offsetX = Phaser.Math.Between(-15, 15);
+            const offsetY = Phaser.Math.Between(-10, 10);
+            const fireball = this.fireballs.create(sunX + offsetX, sunY + offsetY, 'fireball');
+            
+            // Play fireball spawn sound
+            this.playSound('fireballSpawn', { volume: 0.3 });
+            
+            // Set calculated velocity
+            fireball.body.setVelocity(finalVelocityX, finalVelocityY);
+            fireball.body.setGravityY(this.FIREBALL_GRAVITY); // Use proper gravity instead of 0
+            fireball.setScale(1.0 * this.scaleFactor); // Increased from 0.8 for better visibility
+            
+            // Apply mobile scaling to fireball size - INCREASED SIZE FOR BETTER VISIBILITY
+            const fireballSize = 50 * this.scaleFactor; // Increased from 40
+            fireball.setDisplaySize(fireballSize, fireballSize);
+            
+            // Rotate fireball to match trajectory
+            const angle = Math.atan2(finalVelocityY, finalVelocityX);
+            fireball.setRotation(angle);
+        }
     }
     
     checkCollisions() {
@@ -1836,16 +1992,21 @@ class GameScene extends Phaser.Scene {
         // Debug mode: disable death to allow collision box testing
         if (this.debugMode) {
             // Reset player to first cloud if they fall too far
-            if (this.player.y > 1100) {
-                this.player.setPosition(200, 790); // Reset to start position
+            if (this.player.y > 1000) {
+                this.player.setPosition(200, 480); // Reset to start position above first platform
                 this.player.body.setVelocity(0, 0);
                 this.player.isGrounded = false;
             }
             return;
         }
         
-        // Check if player fell off screen - trigger game over earlier
-        if (this.player.y > 1100) { // Trigger earlier at 1100 instead of 1180
+        // Check if player fell off screen - trigger game over at reasonable height
+        // Also check if player falls too far below any platform
+        const lowestPlatformY = Math.max(...this.clouds.map(cloud => cloud.y)) + 200;
+        const fallThreshold = Math.min(1000, lowestPlatformY); // Use lower of the two values
+        
+        if (this.player.y > fallThreshold) {
+            console.log('Player death triggered - fell off platforms at y:', this.player.y);
             this.playerDeath();
         }
     }
@@ -1868,7 +2029,7 @@ class GameScene extends Phaser.Scene {
             targets: blackScreen,
             alpha: 1,
             duration: 300,
-            onComplete: () => {
+                       onComplete: () => {
                 blackScreen.destroy();
                 this.showGameOverScreen();
             }
@@ -1877,7 +2038,7 @@ class GameScene extends Phaser.Scene {
     
     respawnPlayer() {
         // Reset player position to above the first cloud
-        this.player.setPosition(200, 790); // Positioned to land on first cloud
+        this.player.setPosition(200, 480); // Updated position to match new platform heights at Y=550
         this.player.body.setVelocity(0, 0);
         this.player.isGrounded = false; // Start falling to land on cloud
         
@@ -1901,19 +2062,19 @@ class GameScene extends Phaser.Scene {
             
             // Respawn the key only if it doesn't exist or was destroyed
             if (!this.key || !this.key.active) {
-                this.key = this.physics.add.sprite(1200, 320, 'key');
-                const keySize = 30 * this.scaleFactor;
+                this.key = this.physics.add.sprite(1750, 380, 'key');
+                const keySize = 40 * this.scaleFactor; // Updated to match increased size
                 this.key.setDisplaySize(keySize, keySize);
                 this.key.body.setImmovable(true);
                 this.key.body.setGravityY(0);
                 this.key.floatDirection = 1;
-                this.key.originalY = 320;
+                this.key.originalY = 380;
             }
             
             // Respawn the sun
             this.sun.setVisible(true);
             this.sun.setAlpha(1);
-            this.sun.setScale(0.8 * this.scaleFactor);
+            this.sun.setScale(0.8 * this.scaleFactor); // Updated to match increased size
         }
         
         // Clear fireballs
@@ -2256,22 +2417,24 @@ class GameScene extends Phaser.Scene {
     }
 
     resize(gameSize, baseSize, displaySize, resolution) {
-        // Handle game resize events to prevent zoom issues and maintain responsiveness
+        // Handle game resize events to maintain proper scaling and prevent stretching
         const width = gameSize.width;
         const height = gameSize.height;
         
-        console.log('Game resize event:', { width, height });
+        console.log('Game resize event:', { width, height, baseSize, displaySize });
         
         // Update device detection with new dimensions
         this.updateDeviceDetection();
         
-        // Update camera to use new dimensions
-        this.cameras.main.setSize(width, height);
-        this.cameras.main.setBounds(0, 0, 1920, 1080);
+        // For FIT mode, the camera size should match the base size to maintain aspect ratio
+        this.cameras.main.setSize(1920, 1080); // Keep fixed aspect ratio
+        this.cameras.main.setBounds(0, 0, this.worldWidth, this.worldHeight);
         
-        // Update background scaling
-        if (this.backgroundImage) {
-            this.updateBackgroundScale();
+        // Update background scaling to cover the world properly
+        if (this.backgroundImages) {
+            this.backgroundImages.forEach(bg => {
+                bg.setScale(this.worldHeight / bg.texture.source[0].height);
+            });
         }
         
         // Update UI positions if they exist
@@ -2279,7 +2442,7 @@ class GameScene extends Phaser.Scene {
             this.updateUIPositions();
         }
         
-        // Update any screen overlays
+        // Update any screen overlays to fit the display
         if (this.startScreen) {
             this.updateScreenOverlays();
         }
@@ -2330,6 +2493,53 @@ class GameScene extends Phaser.Scene {
             }
         }
     }
+    
+    createSideScrollerBackground() {
+        // Create a repeating background for side-scrolling
+        try {
+            console.log('Creating side-scroller background, available textures:', Object.keys(this.textures.list));
+            
+            if (!this.textures.exists('bgFull')) {
+                console.error('Background texture "bgFull" not found, using fallback');
+                // Create a fallback colored background
+                const fallbackBg = this.add.rectangle(this.worldWidth / 2, this.worldHeight / 2, this.worldWidth, this.worldHeight, 0x87CEEB);
+                this.backgroundImage = fallbackBg;
+                return;
+            }
+            
+            // Create multiple background instances to cover the world width
+            const bgTexture = this.textures.get('bgFull');
+            const bgWidth = bgTexture.source[0].width;
+            const bgHeight = bgTexture.source[0].height;
+            
+            // Calculate how many background images we need to cover the world width
+            const scaleY = this.worldHeight / bgHeight;
+            const scaledBgWidth = bgWidth * scaleY;
+            const numBackgrounds = Math.ceil(this.worldWidth / scaledBgWidth);
+            
+            this.backgroundImages = [];
+            
+            for (let i = 0; i < numBackgrounds; i++) {
+                const bg = this.add.image(i * scaledBgWidth + (scaledBgWidth / 2), this.worldHeight / 2, 'bgFull');
+                bg.setScale(scaleY);
+                bg.setDepth(-100); // Put background behind everything
+                this.backgroundImages.push(bg);
+            }
+            
+            console.log('Side-scroller background created:', { 
+                worldWidth: this.worldWidth, 
+                worldHeight: this.worldHeight, 
+                numBackgrounds,
+                scaledBgWidth,
+                scaleY
+            });
+        } catch (error) {
+            console.error('Error creating side-scroller background:', error);
+            // Create a fallback colored background
+            const fallbackBg = this.add.rectangle(this.worldWidth / 2, this.worldHeight / 2, this.worldWidth, this.worldHeight, 0x87CEEB);
+            this.backgroundImage = fallbackBg;
+        }
+    }
 }
 
 // Game configuration
@@ -2348,7 +2558,7 @@ const config = {
     },
     scene: GameScene,
     scale: {
-        mode: Phaser.Scale.RESIZE,
+        mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH,
         width: 1920,
         height: 1080,
@@ -2360,12 +2570,12 @@ const config = {
             width: 1920,
             height: 1080
         },
-        // Enhanced mobile handling
+        // Enhanced mobile handling - prevent stretching
         fullscreenTarget: 'app',
         expandParent: false,
-        // Allow both orientations
+        // Allow both orientations but maintain aspect ratio
         forceOrientation: false,
-        // Prevent zoom issues
+        // Prevent zoom and maintain proper scaling
         zoom: 1
     },
     // Mobile optimizations
