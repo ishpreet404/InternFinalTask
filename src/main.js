@@ -72,20 +72,44 @@ class GameScene extends Phaser.Scene {
         // Device detection and scaling - call this dynamically on orientation change
         this.isMobile = this.detectMobileDevice();
         
-        // Enhanced scaling for landscape mobile devices
-        if (this.isMobile && this.isLandscape) {
-            // Landscape mobile: slightly larger scale since we have more horizontal space
-            this.scaleFactor = 0.7;
-            this.uiScaleFactor = 0.9;
-        } else if (this.isMobile) {
-            // Portrait mobile: smaller scale
-            this.scaleFactor = 0.5;
-            this.uiScaleFactor = 0.7;
+        // Get current screen dimensions
+        const screenWidth = window.innerWidth;
+        const screenHeight = window.innerHeight;
+        this.isLandscape = screenWidth > screenHeight;
+        
+        // Calculate responsive scale factor based on screen size
+        const baseWidth = 1920;
+        const baseHeight = 1080;
+        
+        // Calculate scale to fit screen while maintaining aspect ratio
+        const scaleX = screenWidth / baseWidth;
+        const scaleY = screenHeight / baseHeight;
+        const baseScale = Math.min(scaleX, scaleY);
+        
+        // Apply device-specific scaling adjustments
+        if (this.isMobile) {
+            if (this.isLandscape) {
+                // Mobile landscape: use calculated scale with reasonable limits
+                this.scaleFactor = Math.max(0.4, Math.min(1.0, baseScale * 1.1));
+                this.uiScaleFactor = Math.max(0.6, Math.min(1.2, baseScale * 1.3));
+            } else {
+                // Mobile portrait: smaller scale for compact layout
+                this.scaleFactor = Math.max(0.3, Math.min(0.8, baseScale * 0.9));
+                this.uiScaleFactor = Math.max(0.5, Math.min(1.0, baseScale * 1.4));
+            }
         } else {
-            // Desktop: full scale
-            this.scaleFactor = 1.0;
-            this.uiScaleFactor = 1.0;
+            // Desktop: use calculated scale with reasonable limits
+            this.scaleFactor = Math.max(0.6, Math.min(1.2, baseScale));
+            this.uiScaleFactor = Math.max(0.8, Math.min(1.0, baseScale));
         }
+        
+        console.log('Device detection updated:', {
+            isMobile: this.isMobile,
+            isLandscape: this.isLandscape,
+            screenSize: { width: screenWidth, height: screenHeight },
+            scaleFactor: this.scaleFactor,
+            uiScaleFactor: this.uiScaleFactor
+        });
     }
 
     detectMobileDevice() {
@@ -200,26 +224,21 @@ class GameScene extends Phaser.Scene {
                 return;
             }
             
-            if (this.isMobile) {
-                // For mobile, ensure background covers the entire screen regardless of orientation
-                const gameWidth = this.cameras.main.width;
-                const gameHeight = this.cameras.main.height;
-                
-                // Calculate scale to cover the entire screen
-                const scaleX = gameWidth / bg.width;
-                const scaleY = gameHeight / bg.height;
-                const scale = Math.max(scaleX, scaleY);
-                
-                bg.setScale(scale);
-                bg.setPosition(gameWidth / 2, gameHeight / 2);
-            } else {
-                // Desktop: use standard size
-                bg.setDisplaySize(1920, 1080);
-            }
+            // Always scale to cover the viewport properly (mobile and desktop)
+            const gameWidth = this.cameras.main.width;
+            const gameHeight = this.cameras.main.height;
+            
+            // Calculate scale to cover the entire screen
+            const scaleX = gameWidth / bg.width;
+            const scaleY = gameHeight / bg.height;
+            const scale = Math.max(scaleX, scaleY);
+            
+            bg.setScale(scale);
+            bg.setPosition(gameWidth / 2, gameHeight / 2);
             
             // Store reference for potential updates
             this.backgroundImage = bg;
-            console.log('Background created successfully for', this.isMobile ? 'mobile' : 'desktop');
+            console.log('Background created successfully:', { gameWidth, gameHeight, scale });
         } catch (error) {
             console.error('Error creating background:', error);
             // Create a fallback colored background
@@ -229,17 +248,23 @@ class GameScene extends Phaser.Scene {
     }
     
     updateBackgroundScale() {
-        // Update background scaling when orientation changes
-        if (this.backgroundImage && this.isMobile) {
+        // Update background scaling when orientation or window size changes
+        if (this.backgroundImage) {
             const gameWidth = this.cameras.main.width;
             const gameHeight = this.cameras.main.height;
             
-            const scaleX = gameWidth / this.backgroundImage.width;
-            const scaleY = gameHeight / this.backgroundImage.height;
+            // Get the original texture dimensions
+            const bgWidth = this.backgroundImage.texture ? this.backgroundImage.texture.source[0].width : 1920;
+            const bgHeight = this.backgroundImage.texture ? this.backgroundImage.texture.source[0].height : 1080;
+            
+            const scaleX = gameWidth / bgWidth;
+            const scaleY = gameHeight / bgHeight;
             const scale = Math.max(scaleX, scaleY);
             
             this.backgroundImage.setScale(scale);
             this.backgroundImage.setPosition(gameWidth / 2, gameHeight / 2);
+            
+            console.log('Background scale updated:', { gameWidth, gameHeight, scale });
         }
     }
     
@@ -837,60 +862,62 @@ class GameScene extends Phaser.Scene {
         // Update background scaling first
         this.updateBackgroundScale();
         
-        // Update joystick position
+        // Get current screen dimensions
+        const screenWidth = this.cameras.main.width;
+        const screenHeight = this.cameras.main.height;
+        
+        // Calculate responsive UI positions based on screen size
         let joystickX, joystickY;
-        if (this.isMobile && this.isLandscape) {
-            // Landscape mobile: position closer to bottom-left corner
-            joystickX = 80;
-            joystickY = this.cameras.main.height - 80;
-        } else if (this.isMobile) {
-            // Portrait mobile: standard mobile positioning
-            joystickX = 100;
-            joystickY = this.cameras.main.height - 120;
+        let shieldButtonX, shieldButtonY;
+        
+        if (this.isMobile) {
+            // Mobile device positioning - responsive to screen size
+            const margin = Math.max(50, Math.min(100, screenWidth * 0.05)); // 5% of screen width, min 50px, max 100px
+            const bottomMargin = Math.max(60, Math.min(120, screenHeight * 0.08)); // 8% of screen height
+            
+            if (this.isLandscape) {
+                // Landscape mobile: position closer to edges
+                joystickX = margin;
+                joystickY = screenHeight - bottomMargin;
+                shieldButtonX = screenWidth - margin;
+                shieldButtonY = screenHeight - bottomMargin;
+            } else {
+                // Portrait mobile: more centered positioning
+                joystickX = margin + 20;
+                joystickY = screenHeight - bottomMargin - 20;
+                shieldButtonX = screenWidth - margin - 20;
+                shieldButtonY = screenHeight - bottomMargin - 20;
+            }
         } else {
-            // Desktop: fixed position
-            joystickX = 100;
-            joystickY = 980;
+            // Desktop: use fixed positions but scale appropriately
+            const scale = Math.min(screenWidth / 1920, screenHeight / 1080);
+            joystickX = 100 * scale;
+            joystickY = screenHeight - (100 * scale);
+            shieldButtonX = screenWidth - (100 * scale);
+            shieldButtonY = screenHeight - (100 * scale);
         }
         
         this.joystickBase.setPosition(joystickX, joystickY);
         this.joystickKnob.setPosition(joystickX, joystickY);
         this.joystickCenter = { x: joystickX, y: joystickY };
         
-        // Update shield button position
-        let shieldButtonX, shieldButtonY;
-        if (this.isMobile && this.isLandscape) {
-            // Landscape mobile: position closer to bottom-right corner
-            shieldButtonX = this.cameras.main.width - 80;
-            shieldButtonY = this.cameras.main.height - 80;
-        } else if (this.isMobile) {
-            // Portrait mobile: standard mobile positioning
-            shieldButtonX = this.cameras.main.width - 120;
-            shieldButtonY = this.cameras.main.height - 120;
-        } else {
-            // Desktop: fixed position
-            shieldButtonX = 1820;
-            shieldButtonY = 980;
-        }
-        
         this.shieldButton.setPosition(shieldButtonX, shieldButtonY);
         
-        // Update health and shield display positioning
-        const shieldSpacing = this.isMobile ? 30 : 35;
-        const shieldStartX = this.isMobile && this.isLandscape ? 15 : 20;
-        const shieldY = this.isMobile && this.isLandscape ? 15 : 20;
-        const healthStartX = this.isMobile && this.isLandscape ? 15 : 20;
-        const healthY = this.isMobile && this.isLandscape ? 55 : 70;
+        // Update health and shield display positioning with responsive spacing
+        const uiMargin = this.isMobile ? Math.max(15, screenWidth * 0.02) : 20;
+        const shieldSpacing = this.isMobile ? Math.max(25, screenWidth * 0.025) : 35;
+        const topMargin = this.isMobile ? Math.max(15, screenHeight * 0.02) : 20;
         
         // Update shield displays
         for (let i = 0; i < this.shieldDisplays.length; i++) {
-            this.shieldDisplays[i].setPosition(shieldStartX + (i * shieldSpacing), shieldY);
+            this.shieldDisplays[i].setPosition(uiMargin + (i * shieldSpacing), topMargin);
             this.shieldDisplays[i].setScale(0.6 * this.uiScaleFactor);
         }
         
-        // Update health displays
+        // Update health displays (below shields)
+        const healthY = topMargin + (this.isMobile ? 35 : 50);
         for (let i = 0; i < this.healthDisplays.length; i++) {
-            this.healthDisplays[i].setPosition(healthStartX + (i * shieldSpacing), healthY);
+            this.healthDisplays[i].setPosition(uiMargin + (i * shieldSpacing), healthY);
             this.healthDisplays[i].setScale(0.6 * this.uiScaleFactor);
         }
         
@@ -898,6 +925,12 @@ class GameScene extends Phaser.Scene {
         this.joystickBase.setScale(0.8 * this.uiScaleFactor);
         this.joystickKnob.setRadius(20 * this.uiScaleFactor);
         this.shieldButton.setScale(0.8 * this.uiScaleFactor);
+        
+        console.log('UI positions updated:', {
+            joystick: { x: joystickX, y: joystickY },
+            shieldButton: { x: shieldButtonX, y: shieldButtonY },
+            screenSize: { width: screenWidth, height: screenHeight }
+        });
     }
 
     createInput() {
@@ -1902,7 +1935,81 @@ class GameScene extends Phaser.Scene {
         }
     }
 
-    // ...existing code...
+    resize(gameSize, baseSize, displaySize, resolution) {
+        // Handle game resize events to prevent zoom issues and maintain responsiveness
+        const width = gameSize.width;
+        const height = gameSize.height;
+        
+        console.log('Game resize event:', { width, height });
+        
+        // Update device detection with new dimensions
+        this.updateDeviceDetection();
+        
+        // Update camera to use new dimensions
+        this.cameras.main.setSize(width, height);
+        this.cameras.main.setBounds(0, 0, 1920, 1080);
+        
+        // Update background scaling
+        if (this.backgroundImage) {
+            this.updateBackgroundScale();
+        }
+        
+        // Update UI positions if they exist
+        if (this.joystickBase) {
+            this.updateUIPositions();
+        }
+        
+        // Update any screen overlays
+        if (this.startScreen) {
+            this.updateScreenOverlays();
+        }
+    }
+
+    updateScreenOverlays() {
+        // Update screen overlays (start screen, game over, etc.) to fit new dimensions
+        const gameWidth = this.cameras.main.width;
+        const gameHeight = this.cameras.main.height;
+        
+        // Update start screen if it exists
+        if (this.startScreen) {
+            this.startScreen.setPosition(gameWidth / 2, gameHeight / 2);
+            
+            // Update the blurred background in the start screen
+            const startBG = this.startScreen.list[0]; // First element should be the background
+            if (startBG && startBG.texture) {
+                const scaleX = gameWidth / startBG.texture.source[0].width;
+                const scaleY = gameHeight / startBG.texture.source[0].height;
+                const scale = Math.max(scaleX, scaleY);
+                startBG.setScale(scale);
+            }
+        }
+        
+        // Update game over screen if it exists
+        if (this.gameOverScreen) {
+            this.gameOverScreen.setPosition(gameWidth / 2, gameHeight / 2);
+            
+            const gameOverBG = this.gameOverScreen.list[0];
+            if (gameOverBG && gameOverBG.texture) {
+                const scaleX = gameWidth / gameOverBG.texture.source[0].width;
+                const scaleY = gameHeight / gameOverBG.texture.source[0].height;
+                const scale = Math.max(scaleX, scaleY);
+                gameOverBG.setScale(scale);
+            }
+        }
+        
+        // Update level complete screen if it exists
+        if (this.levelCompleteScreen) {
+            this.levelCompleteScreen.setPosition(gameWidth / 2, gameHeight / 2);
+            
+            const completeBG = this.levelCompleteScreen.list[0];
+            if (completeBG && completeBG.texture) {
+                const scaleX = gameWidth / completeBG.texture.source[0].width;
+                const scaleY = gameHeight / completeBG.texture.source[0].height;
+                const scale = Math.max(scaleX, scaleY);
+                completeBG.setScale(scale);
+            }
+        }
+    }
 }
 
 // Game configuration
@@ -1921,13 +2028,13 @@ const config = {
     },
     scene: GameScene,
     scale: {
-        mode: Phaser.Scale.FIT,
+        mode: Phaser.Scale.RESIZE,
         autoCenter: Phaser.Scale.CENTER_BOTH,
         width: 1920,
         height: 1080,
         min: {
-            width: 320,
-            height: 180
+            width: 360,
+            height: 640
         },
         max: {
             width: 1920,
@@ -1935,9 +2042,11 @@ const config = {
         },
         // Enhanced mobile handling
         fullscreenTarget: 'app',
-        expandParent: true,
-        // Force landscape on mobile devices
-        forceOrientation: false
+        expandParent: false,
+        // Allow both orientations
+        forceOrientation: false,
+        // Prevent zoom issues
+        zoom: 1
     },
     // Mobile optimizations
     render: {
@@ -1963,39 +2072,45 @@ function handleOrientationChange() {
         if (game.scene.scenes[0]) {
             const scene = game.scene.scenes[0];
             
-            // Update device detection with new orientation
+            console.log('Orientation change detected');
+            
+            // Update device detection with new dimensions
             scene.updateDeviceDetection();
             
-            // Force a complete scale refresh
-            game.scale.refresh();
-            
-            // Resize the game canvas to fill the screen
-            game.scale.resize(window.innerWidth, window.innerHeight);
-            
-            // Update camera bounds
-            scene.cameras.main.setBounds(0, 0, game.scale.gameSize.width, game.scale.gameSize.height);
-            
-            // If UI elements exist, recreate them with new positioning
-            if (scene.joystickBase) {
+            // Update UI positions and scaling
+            if (scene.updateUIPositions) {
                 scene.updateUIPositions();
             }
+            
+            // Update screen overlays
+            if (scene.updateScreenOverlays) {
+                scene.updateScreenOverlays();
+            }
+            
+            // Force camera bounds update
+            scene.cameras.main.setBounds(0, 0, 1920, 1080);
         }
-    }, 300); // Longer delay for orientation change
+    }, 200);
 }
 
 function handleResize() {
+    // Immediate response for window resize
     if (game.scene.scenes[0]) {
         const scene = game.scene.scenes[0];
+        
+        console.log('Window resize detected');
         
         // Update device detection
         scene.updateDeviceDetection();
         
-        // Refresh the scale
-        game.scale.refresh();
-        
-        // Update UI positions if they exist
-        if (scene.joystickBase) {
+        // Update UI positions and scaling
+        if (scene.updateUIPositions) {
             scene.updateUIPositions();
+        }
+        
+        // Update screen overlays
+        if (scene.updateScreenOverlays) {
+            scene.updateScreenOverlays();
         }
     }
 }
@@ -2003,10 +2118,15 @@ function handleResize() {
 // Handle orientation changes for mobile devices
 window.addEventListener('orientationchange', handleOrientationChange);
 
-// Also handle window resize for better responsiveness
+// Handle window resize for both desktop and mobile
 window.addEventListener('resize', handleResize);
 
-// Handle device orientation API if available
+// Handle device orientation API if available (modern mobile browsers)
 if (screen.orientation) {
     screen.orientation.addEventListener('change', handleOrientationChange);
+}
+
+// Handle visual viewport changes (important for mobile browsers with address bars)
+if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', handleResize);
 }

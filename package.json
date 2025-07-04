@@ -1,13 +1,12 @@
 {
-  "name": "skyfire-ascent",
+  "name": "vite-project",
   "private": true,
-  "version": "1.0.0",
+  "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview",
-    "check-assets": "ls -la public/ | grep -E \"\\.(png|jpg|jpeg)$\""
+    "preview": "vite preview"
   },
   "devDependencies": {
     "vite": "^7.0.0"
