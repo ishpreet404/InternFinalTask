@@ -4,10 +4,8 @@ class GameScene extends Phaser.Scene {
     constructor() {
         super({ key: 'GameScene' });
         
-        // Device detection and scaling
-        this.isMobile = this.detectMobileDevice();
-        this.scaleFactor = this.isMobile ? 0.6 : 1.0; // Scale down assets for mobile
-        this.uiScaleFactor = this.isMobile ? 0.8 : 1.0; // Separate scale for UI elements
+        // Initialize device detection - will be updated dynamically
+        this.updateDeviceDetection();
         
         // Game states
         this.gameState = 'START'; // 'START', 'PLAYING', 'GAME_OVER', 'LEVEL_COMPLETE', 'DYING'
@@ -70,18 +68,58 @@ class GameScene extends Phaser.Scene {
         this.debugText = null;
         this.debugKeys = null;    }
 
+    updateDeviceDetection() {
+        // Device detection and scaling - call this dynamically on orientation change
+        this.isMobile = this.detectMobileDevice();
+        
+        // Enhanced scaling for landscape mobile devices
+        if (this.isMobile && this.isLandscape) {
+            // Landscape mobile: slightly larger scale since we have more horizontal space
+            this.scaleFactor = 0.7;
+            this.uiScaleFactor = 0.9;
+        } else if (this.isMobile) {
+            // Portrait mobile: smaller scale
+            this.scaleFactor = 0.5;
+            this.uiScaleFactor = 0.7;
+        } else {
+            // Desktop: full scale
+            this.scaleFactor = 1.0;
+            this.uiScaleFactor = 1.0;
+        }
+    }
+
     detectMobileDevice() {
         // Check for mobile devices using user agent and screen size
         const userAgent = navigator.userAgent || navigator.vendor || window.opera;
         const isMobileUA = /android|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent);
-        const isSmallScreen = window.innerWidth <= 768 || window.innerHeight <= 600;
+        
+        // Enhanced mobile detection for landscape mode
+        const screenWidth = Math.max(window.innerWidth, window.screen.width);
+        const screenHeight = Math.max(window.innerHeight, window.screen.height);
+        const isSmallScreen = screenWidth <= 1024 || screenHeight <= 768; // More generous for landscape
         const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        
+        // Check if device is in landscape mode
+        this.isLandscape = screenWidth > screenHeight;
         
         return isMobileUA || (isSmallScreen && isTouchDevice);
     }
 
     preload() {
-        // Load all assets from the public folder - using exact names
+        // Add loading progress feedback for debugging deployment issues
+        this.load.on('progress', (value) => {
+            console.log('Loading progress:', Math.round(value * 100) + '%');
+        });
+        
+        this.load.on('filecomplete', (key, type, data) => {
+            console.log('Loaded asset:', key, type);
+        });
+        
+        this.load.on('loaderror', (file) => {
+            console.error('Failed to load asset:', file.key, file.src);
+        });
+        
+        // Load all assets from the public folder - using exact names (case-sensitive for deployment)
         this.load.image('bgFull', 'BG full.png');
         this.load.image('blurredBG', 'Blurred BG.png');
         this.load.image('player', 'Psyger-0.png');
@@ -102,7 +140,7 @@ class GameScene extends Phaser.Scene {
         this.load.image('gameOver', 'Game over.png');
         this.load.image('levelCompleted', 'Level completed.png');
         
-        // Health UI assets - exact names
+        // Health UI assets - exact names (case-sensitive for deployment)
         this.load.image('health1', 'Health 1.png');
         this.load.image('health2', 'health 2.png');
         this.load.image('health3', 'Health 3.png');
@@ -118,17 +156,7 @@ class GameScene extends Phaser.Scene {
     
     create() {
         // Create background using 'BG full' - stretch to cover entire screen with mobile scaling
-        const bg = this.add.image(960, 540, 'bgFull');
-        if (this.isMobile) {
-            // For mobile, scale the background to fit the screen properly
-            const scaleX = this.cameras.main.width / bg.width;
-            const scaleY = this.cameras.main.height / bg.height;
-            const scale = Math.max(scaleX, scaleY); // Ensure full coverage
-            bg.setScale(scale);
-            bg.setPosition(this.cameras.main.centerX, this.cameras.main.centerY);
-        } else {
-            bg.setDisplaySize(1920, 1080);
-        }
+        this.createResponsiveBackground();
         
         // Create start screen
         this.createStartScreen();
@@ -139,8 +167,69 @@ class GameScene extends Phaser.Scene {
         // Create input handling
         this.createInput();
         
+        // Add orientation change listener for mobile devices
+        this.setupOrientationHandlers();
+        
         // Start with the start screen
         this.showStartScreen();
+    }
+    
+    createResponsiveBackground() {
+        // Create background that adapts to screen size and orientation
+        // Add error handling for missing background asset
+        try {
+            const bg = this.add.image(960, 540, 'bgFull');
+            
+            // Verify the background loaded properly
+            if (!bg || !bg.texture || bg.texture.key === '__MISSING') {
+                console.error('Background asset failed to load, using fallback');
+                // Create a fallback colored background
+                const fallbackBg = this.add.rectangle(960, 540, 1920, 1080, 0x87CEEB);
+                this.backgroundImage = fallbackBg;
+                return;
+            }
+            
+            if (this.isMobile) {
+                // For mobile, ensure background covers the entire screen regardless of orientation
+                const gameWidth = this.cameras.main.width;
+                const gameHeight = this.cameras.main.height;
+                
+                // Calculate scale to cover the entire screen
+                const scaleX = gameWidth / bg.width;
+                const scaleY = gameHeight / bg.height;
+                const scale = Math.max(scaleX, scaleY);
+                
+                bg.setScale(scale);
+                bg.setPosition(gameWidth / 2, gameHeight / 2);
+            } else {
+                // Desktop: use standard size
+                bg.setDisplaySize(1920, 1080);
+            }
+            
+            // Store reference for potential updates
+            this.backgroundImage = bg;
+            console.log('Background created successfully for', this.isMobile ? 'mobile' : 'desktop');
+        } catch (error) {
+            console.error('Error creating background:', error);
+            // Create a fallback colored background
+            const fallbackBg = this.add.rectangle(960, 540, 1920, 1080, 0x87CEEB);
+            this.backgroundImage = fallbackBg;
+        }
+    }
+    
+    updateBackgroundScale() {
+        // Update background scaling when orientation changes
+        if (this.backgroundImage && this.isMobile) {
+            const gameWidth = this.cameras.main.width;
+            const gameHeight = this.cameras.main.height;
+            
+            const scaleX = gameWidth / this.backgroundImage.width;
+            const scaleY = gameHeight / this.backgroundImage.height;
+            const scale = Math.max(scaleX, scaleY);
+            
+            this.backgroundImage.setScale(scale);
+            this.backgroundImage.setPosition(gameWidth / 2, gameHeight / 2);
+        }
     }
     
     createStartScreen() {
@@ -163,7 +252,14 @@ class GameScene extends Phaser.Scene {
         gameInfo.setScale(0.8 * this.scaleFactor);
         
         // Add start button text with mobile responsive font size
-        const fontSize = this.isMobile ? '32px' : '48px';
+        let fontSize;
+        if (this.isMobile && this.isLandscape) {
+            fontSize = '36px'; // Slightly larger for landscape
+        } else if (this.isMobile) {
+            fontSize = '28px'; // Smaller for portrait mobile
+        } else {
+            fontSize = '48px'; // Desktop size
+        }
         const startText = this.add.text(0, 200, 'TAP TO START', {
             fontSize: fontSize,
             color: '#ffffff',
@@ -205,7 +301,14 @@ class GameScene extends Phaser.Scene {
         gameOverImage.setScale(0.8 * this.scaleFactor);
         
         // Add restart button text with mobile responsive font size
-        const fontSize = this.isMobile ? '24px' : '36px';
+        let fontSize;
+        if (this.isMobile && this.isLandscape) {
+            fontSize = '28px'; // Good size for landscape
+        } else if (this.isMobile) {
+            fontSize = '20px'; // Smaller for portrait mobile
+        } else {
+            fontSize = '36px'; // Desktop size
+        }
         const restartText = this.add.text(0, 150, 'TAP TO RESTART', {
             fontSize: fontSize,
             color: '#ffffff',
@@ -248,7 +351,14 @@ class GameScene extends Phaser.Scene {
         levelCompleteImage.setScale(0.8 * this.scaleFactor);
         
         // Add next level button text with mobile responsive font size
-        const fontSize = this.isMobile ? '24px' : '36px';
+        let fontSize;
+        if (this.isMobile && this.isLandscape) {
+            fontSize = '28px'; // Good size for landscape
+        } else if (this.isMobile) {
+            fontSize = '20px'; // Smaller for portrait mobile
+        } else {
+            fontSize = '36px'; // Desktop size
+        }
         const nextText = this.add.text(0, 150, 'TAP FOR NEXT LEVEL', {
             fontSize: fontSize,
             color: '#ffffff',
@@ -539,39 +649,68 @@ class GameScene extends Phaser.Scene {
             { x: 1350, y: 280, type: 'cloud1', size: { w: 160, h: 55 },
               collision: { width: 400, height: 0.33, offsetX: 130, offsetY: 315 } },
             
-            // Final cloud - top right with gate
+            // Final cloud - top right with gate (fixed collision box)
             { x: 1500, y: 250, type: 'cloud2', size: { w: 180, h: 65 },
-              collision: { width: 400, height: 0.51, offsetX: 980, offsetY: 2175 } }
+              collision: { width: 400, height: 0.51, offsetX: 20, offsetY: 275 } }
         ];
         
-        cloudData.forEach(data => {
-            const cloud = this.physics.add.sprite(data.x, data.y, data.type);
-            cloud.setImmovable(true);
-            cloud.body.setGravityY(0);
-            
-            // Set visual size with mobile scaling
-            const scaledWidth = data.size.w * this.scaleFactor;
-            const scaledHeight = data.size.h * this.scaleFactor;
-            cloud.setDisplaySize(scaledWidth, scaledHeight);
-            
-            // Use optimized collision box settings from debug session with mobile scaling
-            const scaledCollisionWidth = data.collision.width * this.scaleFactor;
-            const scaledCollisionHeight = data.collision.height * this.scaleFactor;
-            const scaledOffsetX = data.collision.offsetX * this.scaleFactor;
-            const scaledOffsetY = data.collision.offsetY * this.scaleFactor;
-            
-            cloud.body.setSize(scaledCollisionWidth, scaledCollisionHeight);
-            cloud.body.setOffset(scaledOffsetX, scaledOffsetY);
-            
-            cloud.disappearTimer = -1; // -1 means not activated
-            cloud.originalAlpha = 1;
-            cloud.isSolid = true;
-            
-            // Store platform dimensions for collision detection
-            cloud.platformTop = data.y - data.size.h / 2;
-            cloud.platformWidth = data.collision.width;
-            
-            this.clouds.push(cloud);
+        cloudData.forEach((data, index) => {
+            try {
+                const cloud = this.physics.add.sprite(data.x, data.y, data.type);
+                
+                // Check if cloud texture loaded properly
+                if (!cloud || !cloud.texture || cloud.texture.key === '__MISSING') {
+                    console.error(`Cloud ${index} asset (${data.type}) failed to load`);
+                    // Create a fallback rectangle if texture failed to load
+                    cloud.destroy();
+                    const fallbackCloud = this.add.rectangle(data.x, data.y, data.size.w * this.scaleFactor, data.size.h * this.scaleFactor, 0xFFFFFF);
+                    fallbackCloud.setStrokeStyle(2, 0x000000);
+                    // Skip physics setup for fallback and continue
+                    return;
+                }
+                
+                cloud.setImmovable(true);
+                cloud.body.setGravityY(0);
+                
+                // Set visual size with mobile scaling
+                const scaledWidth = data.size.w * this.scaleFactor;
+                const scaledHeight = data.size.h * this.scaleFactor;
+                cloud.setDisplaySize(scaledWidth, scaledHeight);
+                
+                // Use optimized collision box settings from debug session with mobile scaling
+                const scaledCollisionWidth = data.collision.width * this.scaleFactor;
+                const scaledCollisionHeight = data.collision.height * this.scaleFactor;
+                const scaledOffsetX = data.collision.offsetX * this.scaleFactor;
+                const scaledOffsetY = data.collision.offsetY * this.scaleFactor;
+                
+                cloud.body.setSize(scaledCollisionWidth, scaledCollisionHeight);
+                cloud.body.setOffset(scaledOffsetX, scaledOffsetY);
+                
+                cloud.disappearTimer = -1; // -1 means not activated
+                cloud.originalAlpha = 1;
+                cloud.isSolid = true;
+                
+                // Store platform dimensions for collision detection
+                cloud.platformTop = data.y - data.size.h / 2;
+                cloud.platformWidth = data.collision.width;
+                
+                // Add debug info for mobile deployment
+                console.log(`Cloud ${index} created:`, {
+                    type: data.type,
+                    position: { x: data.x, y: data.y },
+                    scaleFactor: this.scaleFactor,
+                    collisionBox: {
+                        width: scaledCollisionWidth,
+                        height: scaledCollisionHeight,
+                        offsetX: scaledOffsetX,
+                        offsetY: scaledOffsetY
+                    }
+                });
+                
+                this.clouds.push(cloud);
+            } catch (error) {
+                console.error(`Error creating cloud ${index}:`, error);
+            }
         });
     }
     
@@ -606,27 +745,46 @@ class GameScene extends Phaser.Scene {
     }
     
     createUI() {
-        // Create individual shield displays (3 shields in a row)
+        // Create individual shield displays (3 shields in a row) with mobile positioning
         this.shieldDisplays = [];
+        const shieldSpacing = this.isMobile ? 30 : 35;
+        const shieldStartX = this.isMobile && this.isLandscape ? 15 : 20;
+        const shieldY = this.isMobile && this.isLandscape ? 15 : 20;
+        
         for (let i = 0; i < 3; i++) {
-            const shield = this.add.image(20 + (i * 35), 20, 'shield1');
+            const shield = this.add.image(shieldStartX + (i * shieldSpacing), shieldY, 'shield1');
             shield.setOrigin(0, 0);
             shield.setScale(0.6 * this.uiScaleFactor);
             this.shieldDisplays.push(shield);
         }
         
-        // Create individual health displays (3 hearts in a row below shields)
+        // Create individual health displays (3 hearts in a row below shields) with mobile positioning
         this.healthDisplays = [];
+        const healthStartX = this.isMobile && this.isLandscape ? 15 : 20;
+        const healthY = this.isMobile && this.isLandscape ? 55 : 70;
+        
         for (let i = 0; i < 3; i++) {
-            const heart = this.add.image(20 + (i * 35), 70, 'health1');
+            const heart = this.add.image(healthStartX + (i * shieldSpacing), healthY, 'health1');
             heart.setOrigin(0, 0);
             heart.setScale(0.6 * this.uiScaleFactor);
             this.healthDisplays.push(heart);
         }
         
         // Create joystick using joystick assets with mobile-responsive positioning
-        const joystickX = this.isMobile ? 100 : 100;
-        const joystickY = this.isMobile ? this.cameras.main.height - 120 : 980;
+        let joystickX, joystickY;
+        if (this.isMobile && this.isLandscape) {
+            // Landscape mobile: position closer to bottom-left corner
+            joystickX = 80;
+            joystickY = this.cameras.main.height - 80;
+        } else if (this.isMobile) {
+            // Portrait mobile: standard mobile positioning
+            joystickX = 100;
+            joystickY = this.cameras.main.height - 120;
+        } else {
+            // Desktop: fixed position
+            joystickX = 100;
+            joystickY = 980;
+        }
         
         this.joystickBase = this.add.image(joystickX, joystickY, 'joystick1');
         this.joystickBase.setScale(0.8 * this.uiScaleFactor);
@@ -638,18 +796,99 @@ class GameScene extends Phaser.Scene {
         this.joystickCenter = { x: joystickX, y: joystickY };
         
         // Create shield button with mobile-responsive positioning
-        const shieldButtonX = this.isMobile ? this.cameras.main.width - 120 : 1820;
-        const shieldButtonY = this.isMobile ? this.cameras.main.height - 120 : 980;
+        let shieldButtonX, shieldButtonY;
+        if (this.isMobile && this.isLandscape) {
+            // Landscape mobile: position closer to bottom-right corner
+            shieldButtonX = this.cameras.main.width - 80;
+            shieldButtonY = this.cameras.main.height - 80;
+        } else if (this.isMobile) {
+            // Portrait mobile: standard mobile positioning
+            shieldButtonX = this.cameras.main.width - 120;
+            shieldButtonY = this.cameras.main.height - 120;
+        } else {
+            // Desktop: fixed position
+            shieldButtonX = 1820;
+            shieldButtonY = 980;
+        }
         
         this.shieldButton = this.add.image(shieldButtonX, shieldButtonY, 'shieldButton');
         this.shieldButton.setScale(0.8 * this.uiScaleFactor);
         this.shieldButton.setInteractive();
         this.shieldButton.setAlpha(0.8);
         this.shieldButton.setVisible(false); // Hidden initially
-        
-        this.updateHealthUI();
+         this.updateHealthUI();
     }
-    
+
+    updateUIPositions() {
+        // Update UI positions when orientation changes
+        if (!this.joystickBase || !this.shieldButton) return;
+        
+        // Update background scaling first
+        this.updateBackgroundScale();
+        
+        // Update joystick position
+        let joystickX, joystickY;
+        if (this.isMobile && this.isLandscape) {
+            // Landscape mobile: position closer to bottom-left corner
+            joystickX = 80;
+            joystickY = this.cameras.main.height - 80;
+        } else if (this.isMobile) {
+            // Portrait mobile: standard mobile positioning
+            joystickX = 100;
+            joystickY = this.cameras.main.height - 120;
+        } else {
+            // Desktop: fixed position
+            joystickX = 100;
+            joystickY = 980;
+        }
+        
+        this.joystickBase.setPosition(joystickX, joystickY);
+        this.joystickKnob.setPosition(joystickX, joystickY);
+        this.joystickCenter = { x: joystickX, y: joystickY };
+        
+        // Update shield button position
+        let shieldButtonX, shieldButtonY;
+        if (this.isMobile && this.isLandscape) {
+            // Landscape mobile: position closer to bottom-right corner
+            shieldButtonX = this.cameras.main.width - 80;
+            shieldButtonY = this.cameras.main.height - 80;
+        } else if (this.isMobile) {
+            // Portrait mobile: standard mobile positioning
+            shieldButtonX = this.cameras.main.width - 120;
+            shieldButtonY = this.cameras.main.height - 120;
+        } else {
+            // Desktop: fixed position
+            shieldButtonX = 1820;
+            shieldButtonY = 980;
+        }
+        
+        this.shieldButton.setPosition(shieldButtonX, shieldButtonY);
+        
+        // Update health and shield display positioning
+        const shieldSpacing = this.isMobile ? 30 : 35;
+        const shieldStartX = this.isMobile && this.isLandscape ? 15 : 20;
+        const shieldY = this.isMobile && this.isLandscape ? 15 : 20;
+        const healthStartX = this.isMobile && this.isLandscape ? 15 : 20;
+        const healthY = this.isMobile && this.isLandscape ? 55 : 70;
+        
+        // Update shield displays
+        for (let i = 0; i < this.shieldDisplays.length; i++) {
+            this.shieldDisplays[i].setPosition(shieldStartX + (i * shieldSpacing), shieldY);
+            this.shieldDisplays[i].setScale(0.6 * this.uiScaleFactor);
+        }
+        
+        // Update health displays
+        for (let i = 0; i < this.healthDisplays.length; i++) {
+            this.healthDisplays[i].setPosition(healthStartX + (i * shieldSpacing), healthY);
+            this.healthDisplays[i].setScale(0.6 * this.uiScaleFactor);
+        }
+        
+        // Update joystick and button scales
+        this.joystickBase.setScale(0.8 * this.uiScaleFactor);
+        this.joystickKnob.setRadius(20 * this.uiScaleFactor);
+        this.shieldButton.setScale(0.8 * this.uiScaleFactor);
+    }
+
     createInput() {
         // Mouse/touch input for joystick and game state management
         this.input.on('pointerdown', (pointer) => {
@@ -676,8 +915,21 @@ class GameScene extends Phaser.Scene {
             }
             
             // Shield button with responsive positioning
-            const shieldButtonX = this.isMobile ? this.cameras.main.width - 120 : 1820;
-            const shieldButtonY = this.isMobile ? this.cameras.main.height - 120 : 980;
+            let shieldButtonX, shieldButtonY;
+            if (this.isMobile && this.isLandscape) {
+                // Landscape mobile: position closer to bottom-right corner
+                shieldButtonX = this.cameras.main.width - 80;
+                shieldButtonY = this.cameras.main.height - 80;
+            } else if (this.isMobile) {
+                // Portrait mobile: standard mobile positioning
+                shieldButtonX = this.cameras.main.width - 120;
+                shieldButtonY = this.cameras.main.height - 120;
+            } else {
+                // Desktop: fixed position
+                shieldButtonX = 1820;
+                shieldButtonY = 980;
+            }
+            
             const shieldDistance = Phaser.Math.Distance.Between(pointer.x, pointer.y, shieldButtonX, shieldButtonY);
             if (shieldDistance <= 60) {
                 this.shieldPressed = true;
@@ -881,13 +1133,19 @@ class GameScene extends Phaser.Scene {
                 const cloudRight = cloud.body.x + cloud.body.width;
                 const cloudTop = cloud.body.y;
                 
+                // More forgiving collision detection for mobile devices
+                // Scale the tolerance based on device scale factor
+                const horizontalTolerance = 10 * (this.isMobile ? 1.5 : 1.0);
+                const verticalTolerance = 25 * (this.isMobile ? 1.5 : 1.0);
+                const verticalOffset = 5 * (this.isMobile ? 1.5 : 1.0);
+                
                 // Check if player is landing on top of the platform and within horizontal bounds
                 // More forgiving collision - allow landing if player is close to the top
                 if (this.player.body.velocity.y >= 0 &&
-                    playerCenterX >= cloudLeft - 10 && 
-                    playerCenterX <= cloudRight + 10 &&
-                    playerBottom >= cloudTop - 5 &&
-                    playerBottom <= cloudTop + 25) {
+                    playerCenterX >= cloudLeft - horizontalTolerance && 
+                    playerCenterX <= cloudRight + horizontalTolerance &&
+                    playerBottom >= cloudTop - verticalOffset &&
+                    playerBottom <= cloudTop + verticalTolerance) {
                     
                     this.player.isGrounded = true;
                     this.player.y = cloudTop - this.player.body.height / 2;
@@ -1124,7 +1382,14 @@ class GameScene extends Phaser.Scene {
         });
         
         // Add visual effect - create and auto-destroy after animation with mobile scaling
-        const fontSize = this.isMobile ? '12px' : '16px';
+        let fontSize;
+        if (this.isMobile && this.isLandscape) {
+            fontSize = '14px'; // Good size for landscape
+        } else if (this.isMobile) {
+            fontSize = '10px'; // Smaller for portrait mobile
+        } else {
+            fontSize = '16px'; // Desktop size
+        }
         const shieldText = this.add.text(gem.x, gem.y - 30, 'Shield Restored!', {
             fontSize: fontSize,
             color: '#00ff00'
@@ -1162,7 +1427,14 @@ class GameScene extends Phaser.Scene {
         this.openGate();
         
         // Show message with mobile scaling
-        const fontSize = this.isMobile ? '24px' : '32px';
+        let fontSize;
+        if (this.isMobile && this.isLandscape) {
+            fontSize = '28px'; // Good size for landscape
+        } else if (this.isMobile) {
+            fontSize = '20px'; // Smaller for portrait mobile
+        } else {
+            fontSize = '32px'; // Desktop size
+        }
         this.add.text(960, 300, 'Key Collected! Reach the Gate!', {
             fontSize: fontSize,
             color: '#ffff00'
@@ -1582,6 +1854,44 @@ class GameScene extends Phaser.Scene {
             if (this.debugText) this.debugText.setText(originalText);
         });
     }
+    
+    setupOrientationHandlers() {
+        // Add orientation change handlers for mobile devices
+        if (this.isMobile) {
+            // Handle screen orientation changes
+            const handleOrientationChange = () => {
+                // Use a small delay to ensure the screen dimensions have updated
+                setTimeout(() => {
+                    console.log('Orientation changed, updating device detection and UI');
+                    this.updateDeviceDetection();
+                    this.updateUIPositions();
+                }, 100);
+            };
+            
+            // Handle window resize (which includes orientation changes)
+            const handleResize = () => {
+                // Use a small delay to ensure the screen dimensions have updated
+                setTimeout(() => {
+                    console.log('Window resized, updating device detection and UI');
+                    this.updateDeviceDetection();
+                    this.updateUIPositions();
+                }, 100);
+            };
+            
+            // Add event listeners
+            window.addEventListener('orientationchange', handleOrientationChange);
+            window.addEventListener('resize', handleResize);
+            
+            // Also handle the visual viewport API if available (better for mobile)
+            if (window.visualViewport) {
+                window.visualViewport.addEventListener('resize', handleResize);
+            }
+            
+            console.log('Orientation change handlers set up for mobile device');
+        }
+    }
+
+    // ...existing code...
 }
 
 // Game configuration
@@ -1611,7 +1921,12 @@ const config = {
         max: {
             width: 1920,
             height: 1080
-        }
+        },
+        // Enhanced mobile handling
+        fullscreenTarget: 'app',
+        expandParent: true,
+        // Force landscape on mobile devices
+        forceOrientation: false
     },
     // Mobile optimizations
     render: {
@@ -1629,3 +1944,58 @@ const config = {
 
 // Start the game
 const game = new Phaser.Game(config);
+
+// Enhanced orientation and resize handling for mobile devices
+function handleOrientationChange() {
+    // Small delay to ensure screen dimensions are updated
+    setTimeout(() => {
+        if (game.scene.scenes[0]) {
+            const scene = game.scene.scenes[0];
+            
+            // Update device detection with new orientation
+            scene.updateDeviceDetection();
+            
+            // Force a complete scale refresh
+            game.scale.refresh();
+            
+            // Resize the game canvas to fill the screen
+            game.scale.resize(window.innerWidth, window.innerHeight);
+            
+            // Update camera bounds
+            scene.cameras.main.setBounds(0, 0, game.scale.gameSize.width, game.scale.gameSize.height);
+            
+            // If UI elements exist, recreate them with new positioning
+            if (scene.joystickBase) {
+                scene.updateUIPositions();
+            }
+        }
+    }, 300); // Longer delay for orientation change
+}
+
+function handleResize() {
+    if (game.scene.scenes[0]) {
+        const scene = game.scene.scenes[0];
+        
+        // Update device detection
+        scene.updateDeviceDetection();
+        
+        // Refresh the scale
+        game.scale.refresh();
+        
+        // Update UI positions if they exist
+        if (scene.joystickBase) {
+            scene.updateUIPositions();
+        }
+    }
+}
+
+// Handle orientation changes for mobile devices
+window.addEventListener('orientationchange', handleOrientationChange);
+
+// Also handle window resize for better responsiveness
+window.addEventListener('resize', handleResize);
+
+// Handle device orientation API if available
+if (screen.orientation) {
+    screen.orientation.addEventListener('change', handleOrientationChange);
+}

@@ -3,21 +3,67 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Skyfire Ascent</title>
     <style>
-      body {
+      * {
         margin: 0;
         padding: 0;
+        box-sizing: border-box;
+      }
+      
+      html, body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
         background: #000;
+        font-family: Arial, sans-serif;
+        touch-action: manipulation;
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+      
+      #app {
+        width: 100vw;
+        height: 100vh;
         display: flex;
         justify-content: center;
         align-items: center;
-        min-height: 100vh;
-        font-family: Arial, sans-serif;
+        background: #000;
       }
+      
       canvas {
-        border: 1px solid #333;
+        width: 100% !important;
+        height: 100% !important;
+        max-width: 100vw;
+        max-height: 100vh;
+        object-fit: contain;
+        display: block;
+      }
+      
+      /* Mobile landscape optimizations */
+      @media screen and (orientation: landscape) and (max-height: 600px) {
+        #app {
+          width: 100vw;
+          height: 100vh;
+        }
+        
+        canvas {
+          width: 100vw !important;
+          height: 100vh !important;
+        }
+      }
+      
+      /* Prevent zoom on double tap */
+      @media (pointer: coarse) {
+        html {
+          -ms-touch-action: manipulation;
+          touch-action: manipulation;
+        }
       }
     </style>
   </head>
