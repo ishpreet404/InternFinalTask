@@ -4,8 +4,11 @@ class GameScene extends Phaser.Scene {
     constructor() {
         super({ key: 'GameScene' });
         
-        // Initialize device detection - will be updated dynamically
-        this.updateDeviceDetection();
+        // Initialize basic values - device detection will happen in create()
+        this.isMobile = false;
+        this.isLandscape = false;
+        this.scaleFactor = 1;
+        this.uiScaleFactor = 1;
         
         // Game states
         this.gameState = 'START'; // 'START', 'PLAYING', 'GAME_OVER', 'LEVEL_COMPLETE', 'DYING'
@@ -113,23 +116,51 @@ class GameScene extends Phaser.Scene {
     }
 
     detectMobileDevice() {
-        // Check for mobile devices using user agent and screen size
+        // Enhanced mobile detection for better reliability
         const userAgent = navigator.userAgent || navigator.vendor || window.opera;
         const isMobileUA = /android|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent);
         
-        // Enhanced mobile detection for landscape mode
-        const screenWidth = Math.max(window.innerWidth, window.screen.width);
-        const screenHeight = Math.max(window.innerHeight, window.screen.height);
-        const isSmallScreen = screenWidth <= 1024 || screenHeight <= 768; // More generous for landscape
+        // Get the actual screen dimensions
+        const screenWidth = window.screen.width;
+        const screenHeight = window.screen.height;
+        const windowWidth = window.innerWidth;
+        const windowHeight = window.innerHeight;
+        
+        // Use the larger dimension as reference for mobile detection
+        const maxScreenDimension = Math.max(screenWidth, screenHeight, windowWidth, windowHeight);
+        const minScreenDimension = Math.min(screenWidth, screenHeight, windowWidth, windowHeight);
+        
+        // Mobile detection criteria
+        const isSmallScreen = maxScreenDimension <= 1366 && minScreenDimension <= 768; // Tablet/mobile size
         const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        const hasDevicePixelRatio = window.devicePixelRatio > 1; // Common on mobile devices
         
-        // Check if device is in landscape mode
-        this.isLandscape = screenWidth > screenHeight;
+        // Check viewport characteristics
+        const hasViewport = window.visualViewport !== undefined;
         
-        return isMobileUA || (isSmallScreen && isTouchDevice);
+        const isMobile = isMobileUA || (isSmallScreen && isTouchDevice) || 
+                        (isTouchDevice && hasDevicePixelRatio && hasViewport);
+        
+        console.log('Mobile detection:', {
+            userAgent: isMobileUA,
+            screenSize: { width: screenWidth, height: screenHeight },
+            windowSize: { width: windowWidth, height: windowHeight },
+            maxDimension: maxScreenDimension,
+            minDimension: minScreenDimension,
+            isSmallScreen,
+            isTouchDevice,
+            hasDevicePixelRatio,
+            devicePixelRatio: window.devicePixelRatio,
+            finalResult: isMobile
+        });
+        
+        return isMobile;
     }
 
     preload() {
+        // Initialize device detection early in preload
+        this.updateDeviceDetection();
+        
         // Add loading progress feedback for debugging deployment issues
         this.load.on('progress', (value) => {
             console.log('Loading progress:', Math.round(value * 100) + '%');
@@ -144,52 +175,55 @@ class GameScene extends Phaser.Scene {
             console.error('Full file object:', file);
         });
         
-        // Set the base URL for assets to ensure proper loading on Vercel
-        const baseURL = '';  // Vite handles this automatically
+        // Set proper base path for mobile deployment
+        this.load.setBaseURL('./');
         
         // Load all assets from the public folder - using exact names (case-sensitive for deployment)
         // Note: In production, Vite will handle the asset paths automatically
-        this.load.image('bgFull', `${baseURL}BG full.png`);
-        this.load.image('blurredBG', `${baseURL}Blurred BG.png`);
-        this.load.image('player', `${baseURL}Psyger-0.png`);
-        this.load.image('sun', `${baseURL}Suhn.png`);
-        this.load.image('fireball', `${baseURL}Fireball.png`);
-        this.load.image('cloud1', `${baseURL}Cloud 1.png`);
-        this.load.image('cloud2', `${baseURL}Cloud 2.png`);
-        this.load.image('cloud3', `${baseURL}Cloud 3.png`);
-        this.load.image('gem', `${baseURL}Gem.png`);
-        this.load.image('key', `${baseURL}Key.png`);
-        this.load.image('gateClose', `${baseURL}Gate close.png`);
-        this.load.image('gateOpen', `${baseURL}Gate open.png`);
-        this.load.image('shield', `${baseURL}Shield.png`);
-        this.load.image('shieldButton', `${baseURL}Shield button.png`);
+        this.load.image('bgFull', 'BG full.png');
+        this.load.image('blurredBG', 'Blurred BG.png');
+        this.load.image('player', 'Psyger-0.png');
+        this.load.image('sun', 'Suhn.png');
+        this.load.image('fireball', 'Fireball.png');
+        this.load.image('cloud1', 'Cloud 1.png');
+        this.load.image('cloud2', 'Cloud 2.png');
+        this.load.image('cloud3', 'Cloud 3.png');
+        this.load.image('gem', 'Gem.png');
+        this.load.image('key', 'Key.png');
+        this.load.image('gateClose', 'Gate close.png');
+        this.load.image('gateOpen', 'Gate open.png');
+        this.load.image('shield', 'Shield.png');
+        this.load.image('shieldButton', 'Shield button.png');
         
         // UI Screen assets
-        this.load.image('gameInfo', `${baseURL}Game Info.png`);
-        this.load.image('gameOver', `${baseURL}Game over.png`);
-        this.load.image('levelCompleted', `${baseURL}Level completed.png`);
+        this.load.image('gameInfo', 'Game Info.png');
+        this.load.image('gameOver', 'Game over.png');
+        this.load.image('levelCompleted', 'Level completed.png');
         
         // Health UI assets - exact names (case-sensitive for deployment)
-        this.load.image('health1', `${baseURL}Health 1.png`);
-        this.load.image('health2', `${baseURL}health 2.png`);
-        this.load.image('health3', `${baseURL}Health 3.png`);
-        this.load.image('shield1', `${baseURL}Shield 1.png`);
-        this.load.image('shield2', `${baseURL}Shield 2.png`);
-        this.load.image('shield3', `${baseURL}Shield 3.png`);
+        this.load.image('health1', 'Health 1.png');
+        this.load.image('health2', 'health 2.png');
+        this.load.image('health3', 'Health 3.png');
+        this.load.image('shield1', 'Shield 1.png');
+        this.load.image('shield2', 'Shield 2.png');
+        this.load.image('shield3', 'Shield 3.png');
         
         // Joystick assets
-        this.load.image('joystick1', `${baseURL}Joystick 1.png`);
-        this.load.image('joystick2', `${baseURL}Joystick 2.png`);
-        this.load.image('joystick3', `${baseURL}Joystick 3.png`);
+        this.load.image('joystick1', 'Joystick 1.png');
+        this.load.image('joystick2', 'Joystick 2.png');
+        this.load.image('joystick3', 'Joystick 3.png');
         
         // Add a final check to see if all assets loaded
         this.load.on('complete', () => {
             console.log('All assets loaded successfully!');
-            console.log('Textures available:', this.textures.list);
+            console.log('Textures available:', Object.keys(this.textures.list));
         });
     }
     
     create() {
+        // Update device detection now that the scene is created
+        this.updateDeviceDetection();
+        
         // Create background using 'BG full' - stretch to cover entire screen with mobile scaling
         this.createResponsiveBackground();
         
@@ -213,24 +247,29 @@ class GameScene extends Phaser.Scene {
         // Create background that adapts to screen size and orientation
         // Add error handling for missing background asset
         try {
-            const bg = this.add.image(960, 540, 'bgFull');
+            console.log('Creating background, available textures:', Object.keys(this.textures.list));
             
-            // Verify the background loaded properly
-            if (!bg || !bg.texture || bg.texture.key === '__MISSING') {
-                console.error('Background asset failed to load, using fallback');
+            if (!this.textures.exists('bgFull')) {
+                console.error('Background texture "bgFull" not found, using fallback');
                 // Create a fallback colored background
                 const fallbackBg = this.add.rectangle(960, 540, 1920, 1080, 0x87CEEB);
                 this.backgroundImage = fallbackBg;
                 return;
             }
             
+            const bg = this.add.image(960, 540, 'bgFull');
+            
             // Always scale to cover the viewport properly (mobile and desktop)
             const gameWidth = this.cameras.main.width;
             const gameHeight = this.cameras.main.height;
             
+            // Get the actual texture dimensions
+            const bgWidth = bg.texture.source[0].width;
+            const bgHeight = bg.texture.source[0].height;
+            
             // Calculate scale to cover the entire screen
-            const scaleX = gameWidth / bg.width;
-            const scaleY = gameHeight / bg.height;
+            const scaleX = gameWidth / bgWidth;
+            const scaleY = gameHeight / bgHeight;
             const scale = Math.max(scaleX, scaleY);
             
             bg.setScale(scale);
@@ -238,7 +277,14 @@ class GameScene extends Phaser.Scene {
             
             // Store reference for potential updates
             this.backgroundImage = bg;
-            console.log('Background created successfully:', { gameWidth, gameHeight, scale });
+            console.log('Background created successfully:', { 
+                gameWidth, 
+                gameHeight, 
+                bgWidth, 
+                bgHeight, 
+                scale,
+                isMobile: this.isMobile 
+            });
         } catch (error) {
             console.error('Error creating background:', error);
             // Create a fallback colored background
@@ -1162,31 +1208,45 @@ class GameScene extends Phaser.Scene {
         // Check if player is grounded
         this.player.isGrounded = false;
         
-        // Check collision with clouds
+        // Enhanced collision detection for mobile devices
         this.clouds.forEach(cloud => {
             if (cloud.isSolid && this.physics.overlap(this.player, cloud)) {
                 const playerBottom = this.player.y + this.player.body.height / 2;
                 const playerCenterX = this.player.x;
+                const playerLeft = this.player.x - this.player.body.width / 2;
+                const playerRight = this.player.x + this.player.body.width / 2;
                 
                 // Get the actual collision body bounds
                 const cloudLeft = cloud.body.x;
                 const cloudRight = cloud.body.x + cloud.body.width;
                 const cloudTop = cloud.body.y;
+                const cloudBottom = cloud.body.y + cloud.body.height;
                 
-                // More forgiving collision detection for mobile devices
-                // Scale the tolerance based on device scale factor
-                const horizontalTolerance = 10 * (this.isMobile ? 1.5 : 1.0);
-                const verticalTolerance = 25 * (this.isMobile ? 1.5 : 1.0);
-                const verticalOffset = 5 * (this.isMobile ? 1.5 : 1.0);
+                // Enhanced mobile-friendly collision detection
+                const baseTolerance = this.isMobile ? 20 : 10;
+                const horizontalTolerance = baseTolerance * this.scaleFactor;
+                const verticalTolerance = baseTolerance * this.scaleFactor;
+                const verticalOffset = 5 * this.scaleFactor;
                 
-                // Check if player is landing on top of the platform and within horizontal bounds
-                // More forgiving collision - allow landing if player is close to the top
-                if (this.player.body.velocity.y >= 0 &&
-                    playerCenterX >= cloudLeft - horizontalTolerance && 
-                    playerCenterX <= cloudRight + horizontalTolerance &&
-                    playerBottom >= cloudTop - verticalOffset &&
-                    playerBottom <= cloudTop + verticalTolerance) {
-                    
+                // More generous overlap detection for mobile
+                const horizontalOverlap = (playerRight >= cloudLeft - horizontalTolerance) && 
+                                        (playerLeft <= cloudRight + horizontalTolerance);
+                
+                const landingCondition = this.player.body.velocity.y >= 0 && // Player falling down
+                                       horizontalOverlap && // Horizontal overlap with tolerance
+                                       playerBottom >= cloudTop - verticalOffset && // Close to cloud top
+                                       playerBottom <= cloudBottom + verticalTolerance; // Not too far below
+                
+                console.log('Collision check:', {
+                    cloudIndex: this.clouds.indexOf(cloud),
+                    playerPos: { x: playerCenterX, y: this.player.y, bottom: playerBottom },
+                    cloudBounds: { left: cloudLeft, right: cloudRight, top: cloudTop, bottom: cloudBottom },
+                    horizontalOverlap,
+                    landingCondition,
+                    velocity: this.player.body.velocity.y
+                });
+                
+                if (landingCondition) {
                     this.player.isGrounded = true;
                     this.player.y = cloudTop - this.player.body.height / 2;
                     this.player.body.setVelocityY(0);
@@ -1196,6 +1256,8 @@ class GameScene extends Phaser.Scene {
                         cloud.disappearTimer = 5; // 5 seconds
                         this.lastCloudPosition = { x: cloud.x, y: cloud.y };
                     }
+                    
+                    console.log('Player landed on cloud', this.clouds.indexOf(cloud));
                 }
             }
         });
@@ -1210,11 +1272,13 @@ class GameScene extends Phaser.Scene {
             const gateRight = this.gate.body.x + this.gate.body.width;
             const gateTop = this.gate.body.y;
             
+            // Enhanced gate collision for mobile
+            const gateTolerance = this.isMobile ? 20 : 10;
+            
             // Check if player is landing on top of the gate platform and within horizontal bounds
-            // Only trigger landing if player is falling down onto the platform, not if already grounded
             if (this.player.body.velocity.y >= 0 &&
-                playerCenterX >= gateLeft - 10 && 
-                playerCenterX <= gateRight + 10 &&
+                playerCenterX >= gateLeft - gateTolerance && 
+                playerCenterX <= gateRight + gateTolerance &&
                 playerBottom >= gateTop - 5 &&
                 playerBottom <= gateTop + 25 &&
                 !this.player.isGrounded) { // Only land if not already grounded
@@ -1225,11 +1289,15 @@ class GameScene extends Phaser.Scene {
                 
                 // Update last position when standing on gate
                 this.lastCloudPosition = { x: this.gate.x, y: this.gate.y };
+                
+                console.log('Player landed on gate');
             }
         }
         
-        // Remove the ground collision - let player fall and trigger game over
-        // If player falls below screen, it will be caught by checkDeath()
+        // Add ground collision for debugging on mobile
+        if (this.player.y > 1000 && !this.player.isGrounded) {
+            console.log('Player falling, position:', this.player.y, 'velocity:', this.player.body.velocity.y);
+        }
     }
     
     updateGems(deltaSeconds) {
