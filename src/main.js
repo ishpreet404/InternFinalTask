@@ -18,6 +18,12 @@ class GameScene extends Phaser.Scene {
         this.selectedCloudIndex = 0; // Currently selected cloud for adjustment
         this.adjustmentStep = 1; // Pixels to move per key press
         
+        // Audio system
+        this.sounds = {};
+        this.musicVolume = 0.5;
+        this.sfxVolume = 0.7;
+        this.audioEnabled = true;
+        
         // Game state
         this.player = null;
         this.sun = null;
@@ -178,6 +184,56 @@ class GameScene extends Phaser.Scene {
         // Set proper base path for mobile deployment
         this.load.setBaseURL('./');
         
+        // Load audio files using your actual sound files
+        // Sound effects
+        this.load.audio('jump', [
+            'sounds/403369__corpocracy__2dcharacter_jump01.flac'
+        ]);
+        
+        this.load.audio('gemCollect', [
+            'sounds/135936__bradwesson__collectcoin.wav'
+        ]);
+        
+        this.load.audio('keyCollect', [
+            'sounds/135936__bradwesson__collectcoin.wav' // Reuse coin sound for key
+        ]);
+        
+        this.load.audio('gateOpen', [
+            'sounds/488534__ranner__ui-click.wav' // Use UI click for gate
+        ]);
+        
+        this.load.audio('shieldActivate', [
+            'sounds/249818__spookymodem__magic-shield.wav'
+        ]);
+        
+        this.load.audio('shieldHit', [
+            'sounds/459782__metzik__deflector-shield.wav'
+        ]);
+        
+        this.load.audio('playerHit', [
+            'sounds/506586__mrthenoronha__kill-enemy-3-8-bit.wav'
+        ]);
+        
+        this.load.audio('playerDeath', [
+            'sounds/364929__jofae__game-die.mp3'
+        ]);
+        
+        this.load.audio('fireballSpawn', [
+            'sounds/506586__mrthenoronha__kill-enemy-3-8-bit.wav' // Reuse for fireball spawn
+        ]);
+        
+        this.load.audio('levelComplete', [
+            'sounds/122255__jivatma07__level_complete.wav'
+        ]);
+        
+        this.load.audio('gameOver', [
+            'sounds/364929__jofae__game-die.mp3'
+        ]);
+        
+        this.load.audio('buttonClick', [
+            'sounds/488534__ranner__ui-click.wav'
+        ]);
+        
         // Load all assets from the public folder - using exact names (case-sensitive for deployment)
         // Note: In production, Vite will handle the asset paths automatically
         this.load.image('bgFull', 'BG full.png');
@@ -224,6 +280,9 @@ class GameScene extends Phaser.Scene {
         // Update device detection now that the scene is created
         this.updateDeviceDetection();
         
+        // Initialize audio system
+        this.initializeAudio();
+        
         // Create background using 'BG full' - stretch to cover entire screen with mobile scaling
         this.createResponsiveBackground();
         
@@ -241,6 +300,152 @@ class GameScene extends Phaser.Scene {
         
         // Start with the start screen
         this.showStartScreen();
+    }
+    
+    initializeAudio() {
+        // Initialize audio system with error handling for missing files
+        console.log('Initializing audio system...');
+        
+        try {
+            // Initialize sound objects with fallback for missing audio files
+            const soundKeys = [
+                'jump', 'gemCollect', 'keyCollect', 
+                'gateOpen', 'shieldActivate', 'shieldHit', 'playerHit', 
+                'playerDeath', 'fireballSpawn', 
+                'levelComplete', 'gameOver', 'buttonClick'
+            ];
+            
+            soundKeys.forEach(key => {
+                try {
+                    if (this.cache.audio.exists(key)) {
+                        this.sounds[key] = this.sound.add(key, {
+                            volume: this.sfxVolume
+                        });
+                        console.log(`Audio loaded: ${key}`);
+                    } else {
+                        console.warn(`Audio file not found: ${key}, creating silent placeholder`);
+                        // Create a silent placeholder to prevent errors
+                        this.sounds[key] = {
+                            play: () => console.log(`Would play: ${key}`),
+                            stop: () => console.log(`Would stop: ${key}`),
+                            pause: () => console.log(`Would pause: ${key}`),
+                            resume: () => console.log(`Would resume: ${key}`),
+                            setVolume: () => {},
+                            isPlaying: false
+                        };
+                    }
+                } catch (error) {
+                    console.error(`Error loading sound ${key}:`, error);
+                    // Create a fallback silent sound
+                    this.sounds[key] = {
+                        play: () => {},
+                        stop: () => {},
+                        pause: () => {},
+                        resume: () => {},
+                        setVolume: () => {},
+                        isPlaying: false
+                    };
+                }
+            });
+            
+            // Note: No background music available
+            console.log('Audio system initialized successfully');
+        } catch (error) {
+            console.error('Error initializing audio system:', error);
+            this.audioEnabled = false;
+        }
+    }
+    
+    playSound(soundKey, config = {}) {
+        if (!this.audioEnabled || !this.sounds[soundKey]) {
+            return;
+        }
+        
+        try {
+            // Stop previous instance if already playing (for certain sounds)
+            if (config.stopPrevious && this.sounds[soundKey].isPlaying) {
+                this.sounds[soundKey].stop();
+            }
+            
+            // Set volume if specified
+            if (config.volume !== undefined) {
+                this.sounds[soundKey].setVolume(config.volume * this.sfxVolume);
+            }
+            
+            // Play the sound
+            this.sounds[soundKey].play(config);
+        } catch (error) {
+            console.error(`Error playing sound ${soundKey}:`, error);
+        }
+    }
+    
+    playBackgroundMusic() {
+        // No background music available
+        console.log('No background music to play');
+    }
+    
+    stopBackgroundMusic() {
+        // No background music available
+        console.log('No background music to stop');
+    }
+    
+    pauseBackgroundMusic() {
+        // No background music available
+        console.log('No background music to pause');
+    }
+    
+    resumeBackgroundMusic() {
+        // No background music available
+        console.log('No background music to resume');
+    }
+    
+    setMusicVolume(volume) {
+        this.musicVolume = Phaser.Math.Clamp(volume, 0, 1);
+        // No background music available
+    }
+    
+    setSFXVolume(volume) {
+        this.sfxVolume = Phaser.Math.Clamp(volume, 0, 1);
+        // Update all SFX volumes
+        Object.keys(this.sounds).forEach(key => {
+            if (this.sounds[key].setVolume) {
+                this.sounds[key].setVolume(this.sfxVolume);
+            }
+        });
+    }
+    
+    toggleAudio() {
+        this.audioEnabled = !this.audioEnabled;
+        console.log('Audio toggled:', this.audioEnabled ? 'ON' : 'OFF');
+        return this.audioEnabled;
+    }
+    
+    // Audio testing method for development
+    testAllSounds() {
+        if (!this.debugMode) return;
+        
+        console.log('Testing all game sounds...');
+        const soundKeys = [
+            'jump', 'gemCollect', 'keyCollect', 'gateOpen',
+            'shieldActivate', 'shieldHit', 'playerHit', 'playerDeath',
+            'fireballSpawn', 'levelComplete', 
+            'gameOver', 'buttonClick'
+        ];
+        
+        let index = 0;
+        const playNext = () => {
+            if (index < soundKeys.length) {
+                const soundKey = soundKeys[index];
+                console.log(`Testing sound: ${soundKey}`);
+                this.playSound(soundKey, { volume: 0.3 });
+                index++;
+                setTimeout(playNext, 1000); // Play next sound after 1 second
+            } else {
+                console.log('All sounds tested!');
+            }
+        };
+        
+        playNext();
     }
     
     createResponsiveBackground() {
@@ -562,6 +767,10 @@ class GameScene extends Phaser.Scene {
     
     showGameOverScreen() {
         this.gameState = 'GAME_OVER';
+        
+        // Play game over sound
+        this.playSound('gameOver', { volume: 0.6 });
+        
         if (!this.gameOverScreen) {
             this.createGameOverScreen();
         }
@@ -584,6 +793,9 @@ class GameScene extends Phaser.Scene {
     
     startGame() {
         this.gameState = 'PLAYING';
+        
+        // Play button click sound
+        this.playSound('buttonClick');
         
         // Hide all screens
         this.startScreen.setVisible(false);
@@ -1149,6 +1361,9 @@ class GameScene extends Phaser.Scene {
         // Handle shield activation
         if (shieldInput && this.shieldHealth > 0 && !this.isShielding) {
             this.isShielding = true;
+            
+            // Play shield activation sound
+            this.playSound('shieldActivate', { volume: 0.5 });
         } else if (!shieldInput) {
             this.isShielding = false;
         }
@@ -1184,6 +1399,9 @@ class GameScene extends Phaser.Scene {
             if (inputY < -0.5 && this.player.isGrounded) {
                 this.player.body.setVelocityY(this.JUMP_VELOCITY);
                 this.player.isGrounded = false;
+                
+                // Play jump sound
+                this.playSound('jump', { volume: 0.6 });
             }
         } else {
             // Stop all movement when shielding
@@ -1319,6 +1537,7 @@ class GameScene extends Phaser.Scene {
     updateClouds(deltaSeconds) {
         this.clouds.forEach(cloud => {
             if (cloud.disappearTimer > 0) {
+                const previousTimer = cloud.disappearTimer;
                 cloud.disappearTimer -= deltaSeconds;
                 
                 // Update opacity based on timer
@@ -1409,6 +1628,9 @@ class GameScene extends Phaser.Scene {
         const offsetY = Phaser.Math.Between(-10, 10);
         const fireball = this.fireballs.create(sunX + offsetX, sunY + offsetY, 'fireball');
         
+        // Play fireball spawn sound
+        this.playSound('fireballSpawn', { volume: 0.3 });
+        
         // Set calculated velocity
         fireball.body.setVelocity(finalVelocityX, finalVelocityY);
         fireball.body.setGravityY(0); // We'll handle gravity manually
@@ -1474,6 +1696,9 @@ class GameScene extends Phaser.Scene {
     }
     
     collectGem(gem) {
+        // Play gem collection sound
+        this.playSound('gemCollect', { volume: 0.6 });
+        
         // Gems fully restore shield health
         this.shieldHealth = this.maxShieldHealth;
         this.updateHealthUI();
@@ -1518,6 +1743,9 @@ class GameScene extends Phaser.Scene {
     collectKey() {
         this.hasKey = true;
         
+        // Play key collection sound
+        this.playSound('keyCollect', { volume: 0.7 });
+        
         // Key disappears with animation
         this.tweens.add({
             targets: this.key,
@@ -1552,6 +1780,9 @@ class GameScene extends Phaser.Scene {
         this.gateOpen = true;
         // Switch from 'Gate close' to 'Gate open' sprite
         this.gate.setTexture('gateOpen');
+        
+        // Play gate opening sound
+        this.playSound('gateOpen', { volume: 0.5 });
     }
     
     removeSunAndFireballs() {
@@ -1572,6 +1803,9 @@ class GameScene extends Phaser.Scene {
     }
     
     damageShield() {
+        // Play shield hit sound
+        this.playSound('shieldHit', { volume: 0.6 });
+        
         // Damage the shield when blocking a fireball
         this.shieldHealth--;
         this.updateHealthUI();
@@ -1583,6 +1817,9 @@ class GameScene extends Phaser.Scene {
     }
     
     damagePlayer() {
+        // Play player hit sound
+        this.playSound('playerHit', { volume: 0.7 });
+        
         this.playerHealth--;
         this.updateHealthUI();
         
@@ -1616,6 +1853,9 @@ class GameScene extends Phaser.Scene {
     playerDeath() {
         // Prevent multiple death triggers
         if (this.gameState !== 'PLAYING') return;
+        
+        // Play player death sound
+        this.playSound('playerDeath', { volume: 0.8 });
         
         // Change game state immediately to prevent multiple calls
         this.gameState = 'DYING';
@@ -1687,6 +1927,9 @@ class GameScene extends Phaser.Scene {
     completeLevel() {
         this.levelComplete = true;
         
+        // Play level complete sound
+        this.playSound('levelComplete', { volume: 0.8 });
+        
         // Clear any remaining fireballs (should already be cleared)
         this.fireballs.clear(true, true);
         
@@ -1745,6 +1988,20 @@ class GameScene extends Phaser.Scene {
         this.input.keyboard.on('keydown-ENTER', () => {
             if (this.debugMode && this.gameState === 'PLAYING') {
                 this.exportCollisionBoxData();
+            }
+        });
+        
+        // Add T key for testing all sounds in debug mode
+        this.input.keyboard.on('keydown-T', () => {
+            if (this.debugMode && this.gameState === 'PLAYING') {
+                this.testAllSounds();
+            }
+        });
+        
+        // Add M key for toggling audio in debug mode
+        this.input.keyboard.on('keydown-M', () => {
+            if (this.debugMode) {
+                this.toggleAudio();
             }
         });
         
