@@ -460,8 +460,8 @@ class GameScene extends Phaser.Scene {
         this.key.originalY = 320;
         this.key.setVisible(false); // Hidden initially
         
-        // Create gate on final platform - positioned on the last cloud
-        this.gate = this.physics.add.sprite(1500, 220, 'gateClose'); // Positioned on final cloud (1500, 250)
+        // Create gate on final platform - positioned independently
+        this.gate = this.physics.add.sprite(1500, 220, 'gateClose'); // Gate positioned at (1500, 220)
         this.gate.body.setImmovable(true);
         this.gate.body.setGravityY(0);
         
@@ -655,7 +655,7 @@ class GameScene extends Phaser.Scene {
     }
     
     createClouds() {
-        // Simplified cloud layout - 8 large clouds forming clear upward path from bottom-left to top-right
+        // Simplified cloud layout - 7 large clouds forming clear upward path from bottom-left to top-right
         const cloudData = [
             // Starting cloud - bottom left
             { x: 200, y: 850, type: 'cloud1', size: { w: 180, h: 60 }, 
@@ -683,11 +683,7 @@ class GameScene extends Phaser.Scene {
             
             // Seventh cloud - pre-final platform
             { x: 1350, y: 280, type: 'cloud1', size: { w: 160, h: 55 },
-              collision: { width: 400, height: 0.33, offsetX: 130, offsetY: 315 } },
-            
-            // Final cloud - top right with gate (fixed collision box)
-            { x: 1500, y: 250, type: 'cloud2', size: { w: 180, h: 65 },
-              collision: { width: 400, height: 0.51, offsetX: 20, offsetY: 275 } }
+              collision: { width: 400, height: 0.33, offsetX: 130, offsetY: 315 } }
         ];
         
         cloudData.forEach((data, index) => {
@@ -1315,8 +1311,7 @@ class GameScene extends Phaser.Scene {
             { x: 800, y: 550 },   // Fourth cloud (key)
             { x: 1000, y: 450 },  // Fifth cloud
             { x: 1200, y: 350 },  // Sixth cloud
-            { x: 1350, y: 280 },  // Seventh cloud
-            { x: 1500, y: 250 }   // Final cloud (gate)
+            { x: 1350, y: 280 }   // Seventh cloud
         ];
         
         // Randomly select a cloud to target
